@@ -42,7 +42,7 @@ class SingleStage3DDetector(Base3DDetector):
 
     def init_weights(self, pretrained=None):
         """Initialize weights of detector."""
-        super(SingleStage3DDetector, self).init_weights(pretrained)
+        super(SingleStage3DDetector, self).init_weights()#pretrained)
         self.backbone.init_weights(pretrained=pretrained)
         if self.with_neck:
             if isinstance(self.neck, nn.Sequential):
