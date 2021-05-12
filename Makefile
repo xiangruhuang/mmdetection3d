@@ -21,7 +21,7 @@ checkpoints/dv_mvx-fpn_second_secfpn_adamw_2x8_80e_kitti-3d-3class_20200621_0039
 
 second.test: checkpoints/hv_second_secfpn_6x8_80e_kitti-3d-3class_20200620_230238-9208083a.pth
 	mkdir -p results
-	python tools/test.py configs/second/hv_second_secfpn_6x8_80e_kitti-3d-3class.py $< --out results/second.pkl --eval mAP
+	CUDA_VISIBLE_DEVICES=7 python tools/test.py configs/second/hv_second_secfpn_6x8_80e_kitti-3d-3class.py $< --out results/second.pkl --eval mAP
 
 pointpillars.test: checkpoints/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class_20200620_230421-aa0f3adb.pth
 	mkdir -p results
@@ -39,3 +39,5 @@ mvxnet.test: checkpoints/dv_mvx-fpn_second_secfpn_adamw_2x8_80e_kitti-3d-3class_
 	mkdir -p results
 	CUDA_VISIBLE_DEVICES=1 python tools/test.py configs/mvxnet/dv_mvx-fpn_second_secfpn_adamw_2x8_80e_kitti-3d-3class.py $< --out results/mvxnet.pkl
 
+kitti.extract_objects: checkpoints/hv_second_secfpn_6x8_80e_kitti-3d-3class_20200620_230238-9208083a.pth
+	CUDA_VISIBLE_DEVICES=7 python tools/extract_human_scans.py configs/second/hv_second_secfpn_6x8_80e_kitti-3d-3class.py $<
