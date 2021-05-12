@@ -33,6 +33,7 @@ def main():
 
     if getattr(dataset, 'show', None) is not None:
         # data loading pipeline for showing
+        print('visualizing...')
         eval_pipeline = cfg.get('eval_pipeline', {})
         if eval_pipeline:
             dataset.show(results, args.show_dir, pipeline=eval_pipeline)

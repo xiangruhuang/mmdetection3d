@@ -34,6 +34,9 @@ def parse_args():
         'useful when you want to format the result to a specific format and '
         'submit it to the test server')
     parser.add_argument(
+        '--logfile', type=str,
+        help='place to holder evaluation results')
+    parser.add_argument(
         '--eval',
         type=str,
         nargs='+',
@@ -207,7 +210,12 @@ def main():
             ]:
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
-            print(dataset.evaluate(outputs, **eval_kwargs))
+            with open('results/{}'.format(args.logfile), 'wb') as fout:
+                result_dict = dataset.evaluate(outputs, **eval_kwargs)
+                #import ipdb; ipdb.set_trace()
+                print('saving evaluation results to results/{}'.format(args.logfile))
+                import pickle
+                pickle.dump(result_dict, fout)
 
 
 if __name__ == '__main__':
