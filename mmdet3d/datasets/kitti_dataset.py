@@ -691,7 +691,7 @@ class KittiDataset(Custom3DDataset):
             pipeline.insert(0, dict(type='LoadImageFromFile'))
         return Compose(pipeline)
 
-    def show(self, results, out_dir, show=True, pipeline=None):
+    def show(self, results, out_dir, show=False, pipeline=None):
         """Results visualization.
 
         Args:
@@ -703,7 +703,8 @@ class KittiDataset(Custom3DDataset):
         """
         assert out_dir is not None, 'Expect out_dir, got none.'
         pipeline = self._get_pipeline(pipeline)
-        for i, result in enumerate(results):
+        from tqdm import tqdm
+        for i, result in enumerate(tqdm(results)):
             if 'pts_bbox' in result.keys():
                 result = result['pts_bbox']
             data_info = self.data_infos[i]
@@ -723,7 +724,6 @@ class KittiDataset(Custom3DDataset):
                                                  Box3DMode.DEPTH)
             show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
                         file_name, show)
-
             # multi-modality visualization
             if self.modality['use_camera'] and 'lidar2img' in img_metas.keys():
                 img = img.numpy()
