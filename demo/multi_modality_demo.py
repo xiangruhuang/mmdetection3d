@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from mmdet3d.apis import (inference_multi_modality_detector, init_detector,
+from mmdet3d.apis import (inference_multi_modality_detector, init_model,
                           show_result_meshlab)
 
 
@@ -17,15 +17,28 @@ def main():
         '--score-thr', type=float, default=0.0, help='bbox score threshold')
     parser.add_argument(
         '--out-dir', type=str, default='demo', help='dir to save results')
+    parser.add_argument(
+        '--show', action='store_true', help='show online visuliaztion results')
+    parser.add_argument(
+        '--snapshot',
+        action='store_true',
+        help='whether to save online visuliaztion results')
     args = parser.parse_args()
 
     # build the model from a config file and a checkpoint file
-    model = init_detector(args.config, args.checkpoint, device=args.device)
+    model = init_model(args.config, args.checkpoint, device=args.device)
     # test a single image
     result, data = inference_multi_modality_detector(model, args.pcd,
                                                      args.image, args.ann)
     # show the results
-    show_result_meshlab(data, result, args.out_dir, args.score_thr)
+    show_result_meshlab(
+        data,
+        result,
+        args.out_dir,
+        args.score_thr,
+        show=args.show,
+        snapshot=args.snapshot,
+        task='multi_modality-det')
 
 
 if __name__ == '__main__':
