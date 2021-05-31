@@ -401,17 +401,21 @@ class CenterHead(nn.Module):
             self.get_targets_single, gt_bboxes_3d, gt_labels_3d)
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-        heatmaps = np.array(heatmaps).transpose(1, 0).tolist()
-        heatmaps = [torch.stack(hms_) for hms_ in heatmaps]
+        heatmaps = [[heatmaps[i][j] for i in range(len(heatmaps))] for j in range(len(heatmaps[0]))]
+        heatmaps = [torch.stack(heatmaps_) for heatmaps_ in heatmaps]
+        
         # transpose anno_boxes
-        anno_boxes = np.array(anno_boxes).transpose(1, 0).tolist()
+        anno_boxes = [[anno_boxes[i][j] for i in range(len(anno_boxes))] for j in range(len(anno_boxes[0]))]
         anno_boxes = [torch.stack(anno_boxes_) for anno_boxes_ in anno_boxes]
+
         # transpose inds
-        inds = np.array(inds).transpose(1, 0).tolist()
+        inds = [[inds[i][j] for i in range(len(inds))] for j in range(len(inds[0]))]
         inds = [torch.stack(inds_) for inds_ in inds]
+
         # transpose inds
-        masks = np.array(masks).transpose(1, 0).tolist()
+        masks = [[masks[i][j] for i in range(len(masks))] for j in range(len(masks[0]))]
         masks = [torch.stack(masks_) for masks_ in masks]
+
         return heatmaps, anno_boxes, inds, masks
 
     def get_targets_single(self, gt_bboxes_3d, gt_labels_3d):

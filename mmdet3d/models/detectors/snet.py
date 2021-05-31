@@ -2,15 +2,11 @@ import torch
 from mmcv.runner import force_fp32
 from torch.nn import functional as F
 
-from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
-from mmdet3d.ops import Voxelization
-from mmdet.models import DETECTORS
-from .. import builder
-from .single_stage import SingleStage3DDetector
-
+from mmdet.models import DETECTORS, build_backbone, build_head, build_neck
+from .base import Base3DDetector
 
 @DETECTORS.register_module()
-class SNet(SingleStage3DDetector):
+class SNet(Base3DDetector):
 
     def __init__(self,
                  backbone,
@@ -19,19 +15,21 @@ class SNet(SingleStage3DDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None):
-        super(SNet, self).__init__(
-            backbone=backbone,
-            neck=neck,
-            bbox_head=bbox_head,
-            train_cfg=train_cfg,
-            test_cfg=test_cfg,
-            pretrained=pretrained,
-        )
-        
+        super(SNet, self).__init__()
+        self.backbone = build_backbone(backbone)
+        #bbox_head.update(train_cfg=train_cfg)
+        #bbox_head.update(test_cfg=test_cfg)
+        #self.bbox_head = build_head(bbox_head)
 
     def extract_feat(self, points, img_metas):
         """Extract features from points."""
         import ipdb; ipdb.set_trace()
+        
+        feat_dicts = []
+        for i in range(len(points)):
+            feat_dict = self.backbone(points[i].unsqueeze(0))
+            feat_dicts.append(feat_dict)
+
         #voxels, num_points, coors = self.voxelize(points)
         #voxel_features = self.voxel_encoder(voxels, num_points, coors)
         #batch_size = coors[-1, 0].item() + 1

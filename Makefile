@@ -27,6 +27,10 @@ snet.train:
 	mkdir -p checkpoints/snet-kitti/
 	CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/snet/snet-kitti-3d-3class.py --work-dir checkpoints/snet-kitti/
 
+centerpoint-voxel.train:
+	mkdir -p checkpoints/centerpoint-voxel
+	CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel/
+
 second.visualize: 
 	mkdir -p visualization/second/
 	python tools/misc/visualize_results.py configs/second/hv_second_secfpn_6x8_80e_kitti-3d-3class.py --result results/kitti/second.pkl --show-dir visualization/second/

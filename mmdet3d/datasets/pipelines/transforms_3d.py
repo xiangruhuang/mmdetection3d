@@ -8,7 +8,8 @@ from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import RandomFlip
 from ..builder import OBJECTSAMPLERS
 from .data_augment_utils import noise_per_object_v3_
-
+from mmdet3d.ops import Points_Sampler
+from torch_geometric.nn import fps
 
 @PIPELINES.register_module()
 class RandomFlip3D(RandomFlip):
@@ -701,6 +702,99 @@ class ObjectNameFilter(object):
         repr_str += f'(classes={self.classes})'
         return repr_str
 
+@PIPELINES.register_module()
+class FPSPointSample(object):
+    """Furthest Point Sampling (FPS).
+
+    Sampling data to a certain number, use FPS instead of random sampling.
+
+    Args:
+        name (str): Name of the dataset.
+        num_points (int): Number of points to be sampled.
+    """
+
+    def __init__(self, num_points):
+        self.num_points = num_points
+        #self.fps = Points_Sampler([num_points])
+
+    def points_fps_sampling(self,
+                            points,
+                            num_samples,
+                            replace=None,
+                            return_choices=False):
+        """FPS point sampling.
+
+        Sample points to a certain number, use FPS instead of random sampling.
+
+        Args:
+            points (np.ndarray | :obj:`BasePoints`): 3D Points.
+            num_samples (int): Number of samples to be sampled.
+            replace (bool): Whether the sample is with or without replacement.
+            Defaults to None.
+            return_choices (bool): Whether return choice. Defaults to False.
+
+        Returns:
+            tuple[np.ndarray] | np.ndarray:
+
+                - points (np.ndarray | :obj:`BasePoints`): 3D Points.
+                - choices (np.ndarray, optional): The generated random samples.
+        """
+        if replace is None:
+            replace = (points.shape[0] < num_samples)
+        if replace:
+            choices = np.random.choice(
+                points.shape[0], num_samples, replace=replace)
+        else:
+            import ipdb; ipdb.set_trace()
+            if isinstance(points, np.ndarray):
+                points_torch = torch.as_tensor(points)
+                ratio = (self.num_points + 1) / points_torch.shape[0]
+                choices = fps(points_torch, ratio=ratio)[:self.num_points]
+                #choices = self.fps(points_torch[:, :, :3], points_torch[:, :, 3:].transpose(1, 2))[0]
+            else:
+                points_torch = points.tensor
+                ratio = (self.num_points + 1) / points_torch.shape[0]
+                choices = fps(points_torch, ratio=ratio)[:self.num_points]
+                #choices = self.fps(points_torch[:, :, :3], points_torch[:, :, 3:].transpose(1, 2))[0]
+        if return_choices:
+            return points[choices], choices
+        else:
+            return points[choices]
+
+    def __call__(self, results):
+        """Call function to sample points to in indoor scenes.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after sampling, 'points', 'pts_instance_mask' \
+                and 'pts_semantic_mask' keys are updated in the result dict.
+        """
+        points = results['points']
+        points, choices = self.points_fps_sampling(
+            points, self.num_points, return_choices=True)
+        results['points'] = points
+
+        pts_instance_mask = results.get('pts_instance_mask', None)
+        pts_semantic_mask = results.get('pts_semantic_mask', None)
+
+        if pts_instance_mask is not None:
+            pts_instance_mask = pts_instance_mask[choices]
+            results['pts_instance_mask'] = pts_instance_mask
+
+        if pts_semantic_mask is not None:
+            pts_semantic_mask = pts_semantic_mask[choices]
+            results['pts_semantic_mask'] = pts_semantic_mask
+
+        return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(num_points={self.num_points})'
+        return repr_str
+
 
 @PIPELINES.register_module()
 class IndoorPointSample(object):
@@ -1186,3 +1280,4 @@ class VoxelBasedPointSampler(object):
         repr_str += ' ' * indent + 'prev_voxel_generator=\n'
         repr_str += f'{_auto_indent(repr(self.prev_voxel_generator), 8)})'
         return repr_str
+

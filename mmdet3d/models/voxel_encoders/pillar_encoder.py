@@ -271,6 +271,7 @@ class DynamicPillarFeatureNet(PillarFeatureNet):
         Returns:
             torch.Tensor: Features of pillars.
         """
+        import ipdb; ipdb.set_trace()
         features_ls = [features]
         # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:

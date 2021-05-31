@@ -75,7 +75,6 @@ class Points_Sampler(nn.Module):
         """
         indices = []
         last_fps_end_index = 0
-
         for fps_sample_range, sampler, npoint in zip(
                 self.fps_sample_range_list, self.samplers, self.num_point):
             assert fps_sample_range < points_xyz.shape[1]
@@ -93,7 +92,6 @@ class Points_Sampler(nn.Module):
 
             fps_idx = sampler(sample_points_xyz.contiguous(), sample_features,
                               npoint)
-
             indices.append(fps_idx + last_fps_end_index)
             last_fps_end_index += fps_sample_range
         indices = torch.cat(indices, dim=1)

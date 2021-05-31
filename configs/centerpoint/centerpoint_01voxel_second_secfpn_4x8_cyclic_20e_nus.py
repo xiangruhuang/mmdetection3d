@@ -160,6 +160,7 @@ data = dict(
             ann_file=data_root + 'nuscenes_infos_train.pkl',
             pipeline=train_pipeline,
             classes=class_names,
+            load_interval=10,
             test_mode=False,
             use_valid_flag=True,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset

@@ -87,6 +87,7 @@ class VoxelNet(SingleStage3DDetector):
             dict: Losses of each branch.
         """
         x = self.extract_feat(points, img_metas)
+
         outs = self.bbox_head(x)
         loss_inputs = outs + (gt_bboxes_3d, gt_labels_3d, img_metas)
         losses = self.bbox_head.loss(
