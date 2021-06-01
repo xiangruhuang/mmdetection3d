@@ -183,7 +183,7 @@ def main():
 
     logger.info(f'Model:\n{model}')
     datasets = [build_dataset(cfg.data.train)]
-    print(datasets[0][0])
+    import ipdb; ipdb.set_trace()
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         # in case we use a dataset wrapper

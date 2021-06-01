@@ -23,6 +23,7 @@ model = dict(
 dataset_type = 'NuScenesDataset'
 data_root = 'data/nuscenes/'
 file_client_args = dict(backend='disk')
+workflow = [('train', 1), ('test', 1)]
 
 db_sampler = dict(
     data_root=data_root,
@@ -152,6 +153,8 @@ eval_pipeline = [
 ]
 
 data = dict(
+    samples_per_gpu=3,
+    workers_per_gpu=3,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -160,7 +163,7 @@ data = dict(
             ann_file=data_root + 'nuscenes_infos_train.pkl',
             pipeline=train_pipeline,
             classes=class_names,
-            load_interval=10,
+            load_interval=30,
             test_mode=False,
             use_valid_flag=True,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
