@@ -27,6 +27,10 @@ snet.train:
 	mkdir -p checkpoints/snet-kitti/
 	CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/snet/snet-kitti-3d-3class.py --work-dir checkpoints/snet-kitti/
 
+3dssd.train:
+	mkdir -p checkpoints/3dssd-kitti/
+	CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/3dssd/3dssd_kitti-3d-car.py --work-dir checkpoints/3dssd-kitti/
+
 centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel
 	CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel/
