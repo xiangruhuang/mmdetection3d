@@ -10,6 +10,9 @@ nuscenes:
 		--out-dir ./data/nuscenes \
 		--extra-tag nuscenes
 
+gpu=0
+epoch=10
+
 checkpoints/%.pkl:
 	make -C checkpoints $(notdir $@)
 
@@ -29,7 +32,10 @@ snet.train:
 
 3dssd.train:
 	mkdir -p checkpoints/3dssd-kitti/
-	CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/3dssd/3dssd_kitti-3d-car.py --work-dir checkpoints/3dssd-kitti/
+	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/3dssd/3dssd_kitti-3d-car.py --work-dir checkpoints/3dssd-kitti/
+
+3dssd.test:
+	CUDA_VISIBLE_DEVICES=$(gpu) python tools/test.py configs/3dssd/3dssd_kitti-3d-car.py checkpoints/3dssd-kitti/epoch_$(epoch).pth --eval mAP --out results/kitti/3dssd_epoch-$(epoch).pkl
 
 centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel

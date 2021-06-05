@@ -49,7 +49,8 @@ class Custom3DDataset(Dataset):
                  modality=None,
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,
-                 test_mode=False):
+                 test_mode=False,
+                 load_interval=1):
         super().__init__()
         self.data_root = data_root
         self.ann_file = ann_file
@@ -60,7 +61,7 @@ class Custom3DDataset(Dataset):
 
         self.CLASSES = self.get_classes(classes)
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
-        self.data_infos = self.load_annotations(self.ann_file)
+        self.data_infos = self.load_annotations(self.ann_file)[::load_interval]
 
         if pipeline is not None:
             self.pipeline = Compose(pipeline)

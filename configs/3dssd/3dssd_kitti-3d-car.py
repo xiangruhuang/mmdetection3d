@@ -23,7 +23,8 @@ file_client_args = dict(backend='disk')
 # for more details.
 # file_client_args = dict(
 #     backend='petrel', path_mapping=dict(data='s3://kitti_data/'))
-workflow=[('train', 1), ('test', 1)]
+#workflow=[('train', 1), ('val', 1)]
+#workflow=[('val', 1)]
 
 train_pipeline = [
     dict(
@@ -90,7 +91,7 @@ test_pipeline = [
 data = dict(
     samples_per_gpu=3,
     workers_per_gpu=3,
-    train=dict(dataset=dict(pipeline=train_pipeline), load_interval=10),
+    train=dict(dataset=dict(pipeline=train_pipeline, load_interval=8)),
     val=dict(pipeline=test_pipeline),
     test=dict(pipeline=test_pipeline))
 
