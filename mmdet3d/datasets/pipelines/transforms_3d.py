@@ -197,6 +197,12 @@ class ObjectSample(object):
             gt_bboxes_3d = gt_bboxes_3d.new_box(
                 np.concatenate(
                     [gt_bboxes_3d.tensor.numpy(), sampled_gt_bboxes_3d]))
+            
+            #centers = gt_bboxes_3d.center.numpy()
+            #dist_matrix = np.linalg.norm(centers[:, np.newaxis, :] - centers[np.newaxis, ...], ord=2, axis=-1) + np.eye(centers.shape[0])*1e10
+            #mean_min_dist = np.mean(dist_matrix.min(-1))
+            #print('mean(min_dist)={}'.format(mean_min_dist))
+            #assert False
 
             points = self.remove_points_in_boxes(points, sampled_gt_bboxes_3d)
             # check the points dimension
@@ -605,7 +611,11 @@ class ObjectRangeFilter(object):
         # using mask to index gt_labels_3d will cause bug when
         # len(gt_labels_3d) == 1, where mask=1 will be interpreted
         # as gt_labels_3d[1] and cause out of index error
-        gt_labels_3d = gt_labels_3d[mask.numpy().astype(np.bool)]
+        try:
+            gt_labels_3d = gt_labels_3d[mask.numpy().astype(np.bool)]
+        except Exception as e:
+            import ipdb; ipdb.set_trace()
+            print(e)
 
         # limit rad to [-pi, pi]
         gt_bboxes_3d.limit_yaw(offset=0.5, period=2 * np.pi)

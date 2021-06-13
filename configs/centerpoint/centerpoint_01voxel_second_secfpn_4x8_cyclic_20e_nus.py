@@ -23,7 +23,7 @@ model = dict(
 dataset_type = 'NuScenesDataset'
 data_root = 'data/nuscenes/'
 file_client_args = dict(backend='disk')
-workflow = [('train', 1), ('test', 1)]
+#workflow = [('train', 1), ('test', 1)]
 
 db_sampler = dict(
     data_root=data_root,

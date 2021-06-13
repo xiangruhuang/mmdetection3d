@@ -2,7 +2,7 @@ import gc
 import io as sysio
 import numba
 import numpy as np
-
+from tqdm import tqdm
 
 @numba.jit
 def get_thresholds(scores: np.ndarray, num_gt, num_sample_pts=41):
@@ -494,7 +494,7 @@ def eval_class(gt_annos,
              dontcares, total_dc_num, total_num_valid_gt) = rets
             for k, min_overlap in enumerate(min_overlaps[:, metric, m]):
                 thresholdss = []
-                for i in range(len(gt_annos)):
+                for i in tqdm(range(len(gt_annos))):
                     rets = compute_statistics_jit(
                         overlaps[i],
                         gt_datas_list[i],
@@ -513,7 +513,7 @@ def eval_class(gt_annos,
                 thresholds = np.array(thresholds)
                 pr = np.zeros([len(thresholds), 4])
                 idx = 0
-                for j, num_part in enumerate(split_parts):
+                for j, num_part in enumerate(tqdm(split_parts)):
                     gt_datas_part = np.concatenate(
                         gt_datas_list[idx:idx + num_part], 0)
                     dt_datas_part = np.concatenate(
@@ -608,16 +608,16 @@ def do_eval(gt_annos,
             mAP_aos = get_mAP(ret['orientation'])
 
     mAP_bev = None
-    if 'bev' in eval_types:
-        ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 1,
-                         min_overlaps)
-        mAP_bev = get_mAP(ret['precision'])
+    #if 'bev' in eval_types:
+    #    ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 1,
+    #                     min_overlaps)
+    #    mAP_bev = get_mAP(ret['precision'])
 
     mAP_3d = None
-    if '3d' in eval_types:
-        ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 2,
-                         min_overlaps)
-        mAP_3d = get_mAP(ret['precision'])
+    #if '3d' in eval_types:
+    #    ret = eval_class(gt_annos, dt_annos, current_classes, difficultys, 2,
+    #                     min_overlaps)
+    #    mAP_3d = get_mAP(ret['precision'])
     return mAP_bbox, mAP_bev, mAP_3d, mAP_aos
 
 
@@ -674,6 +674,7 @@ def kitti_eval(gt_annos,
         4: 'Person_sitting',
     }
     name_to_class = {v: n for n, v in class_to_name.items()}
+    print(current_classes)
     if not isinstance(current_classes, (list, tuple)):
         current_classes = [current_classes]
     current_classes_int = []
@@ -701,13 +702,13 @@ def kitti_eval(gt_annos,
     compute_aos = (pred_alpha and valid_alpha_gt)
     if compute_aos:
         eval_types.append('aos')
-
     mAPbbox, mAPbev, mAP3d, mAPaos = do_eval(gt_annos, dt_annos,
                                              current_classes, min_overlaps,
                                              eval_types)
 
     ret_dict = {}
     difficulty = ['easy', 'moderate', 'hard']
+    print('current_classes:', current_classes)
     for j, curcls in enumerate(current_classes):
         # mAP threshold array: [num_minoverlap, metric, class]
         # mAP result: [num_class, num_diff, num_minoverlap]

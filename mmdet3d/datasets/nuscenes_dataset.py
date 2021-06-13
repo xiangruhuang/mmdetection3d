@@ -108,7 +108,7 @@ class NuScenesDataset(Custom3DDataset):
                  data_root=None,
                  classes=None,
                  load_interval=1,
-                 with_velocity=True,
+                 with_velocity=False,
                  modality=None,
                  box_type_3d='LiDAR',
                  filter_empty_gt=True,

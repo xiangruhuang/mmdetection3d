@@ -231,10 +231,10 @@ class DataBaseSampler(object):
                 if len(sampled_cls) > 0:
                     if len(sampled_cls) == 1:
                         sampled_gt_box = sampled_cls[0]['box3d_lidar'][
-                            np.newaxis, ...]
+                                np.newaxis, ..., :7]
                     else:
                         sampled_gt_box = np.stack(
-                            [s['box3d_lidar'] for s in sampled_cls], axis=0)
+                                [s['box3d_lidar'][..., :7] for s in sampled_cls], axis=0)
 
                     sampled_gt_bboxes += [sampled_gt_box]
                     avoid_coll_boxes = np.concatenate(
@@ -262,6 +262,7 @@ class DataBaseSampler(object):
 
             gt_labels = np.array([self.cat2label[s['name']] for s in sampled],
                                  dtype=np.long)
+
             ret = {
                 'gt_labels_3d':
                 gt_labels,
@@ -294,7 +295,7 @@ class DataBaseSampler(object):
         gt_bboxes_bv = box_np_ops.center_to_corner_box2d(
             gt_bboxes[:, 0:2], gt_bboxes[:, 3:5], gt_bboxes[:, 6])
 
-        sp_boxes = np.stack([i['box3d_lidar'] for i in sampled], axis=0)
+        sp_boxes = np.stack([i['box3d_lidar'] for i in sampled], axis=0)[:, :7]
         boxes = np.concatenate([gt_bboxes, sp_boxes], axis=0).copy()
 
         sp_boxes_new = boxes[gt_bboxes.shape[0]:]

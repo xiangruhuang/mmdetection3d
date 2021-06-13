@@ -12,7 +12,7 @@ input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
     info_path=data_root + 'kitti_dbinfos_train.pkl',
-    rate=1.0,
+    rate=5,
     prepare=dict(filter_by_difficulty=[-1], filter_by_min_points=dict(Car=5)),
     classes=class_names,
     sample_groups=dict(Car=15))
@@ -89,8 +89,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=3,
-    workers_per_gpu=3,
+    samples_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(dataset=dict(pipeline=train_pipeline, load_interval=8)),
     val=dict(pipeline=test_pipeline),
     test=dict(pipeline=test_pipeline))

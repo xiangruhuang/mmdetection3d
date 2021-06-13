@@ -31,11 +31,14 @@ snet.train:
 	CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/snet/snet-kitti-3d-3class.py --work-dir checkpoints/snet-kitti/
 
 3dssd.train:
-	mkdir -p checkpoints/3dssd-kitti/
-	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/3dssd/3dssd_kitti-3d-car.py --work-dir checkpoints/3dssd-kitti/
+	CUDA_VISIBLE_DEVICES=0,1,2,3 ./tools/dist_train.sh configs/3dssd/3dssd_nus-3d.py 4
+	#CUDA_VISIBLE_DEVICES=0,1,2,3 ./tools/dist_train.sh configs/3dssd/3dssd_kitti-3d-3class.py 4
+	#CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/3dssd/3dssd_nus-3d.py --work-dir 3dssd_nus-3d/
 
 3dssd.test:
-	CUDA_VISIBLE_DEVICES=$(gpu) python tools/test.py configs/3dssd/3dssd_kitti-3d-car.py checkpoints/3dssd-kitti/epoch_$(epoch).pth --eval mAP --out results/kitti/3dssd_epoch-$(epoch).pkl
+	#CUDA_VISIBLE_DEVICES=$(gpu) python tools/test.py configs/3dssd/3dssd_kitti-3d-3class.py work_dirs/3dssd_kitti-3d-3class/epoch_6.pth --eval mAP --out work_dirs/3dssd_kitti-3d-3class/eval.pkl
+	#CUDA_VISIBLE_DEVICES=0,1,2,3 ./tools/dist_test.sh configs/3dssd/3dssd_kitti-3d-car.py 4 --no-validate
+	CUDA_VISIBLE_DEVICES=0,1,2,3 ./tools/dist_test.sh configs/3dssd/3dssd_kitti-3d-3class.py work_dirs/3dssd_kitti-3d-3class/epoch_150.pth 4 --eval mAP --out work_dirs/3dssd_kitti-3d-3class/eval.pkl
 
 centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel
