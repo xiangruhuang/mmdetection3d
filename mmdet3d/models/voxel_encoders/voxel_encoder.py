@@ -63,7 +63,7 @@ class DynamicSimpleVFE(nn.Module):
         self.scatter = DynamicScatter(voxel_size, point_cloud_range, True)
         self.fp16_enabled = False
 
-    @torch.no_grad()
+    #@torch.no_grad()
     @force_fp32(out_fp16=True)
     def forward(self, features, coors):
         """Forward function.

@@ -43,7 +43,11 @@ snet.train:
 
 centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel
-	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel/
+	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint/centerpoint_03voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel
+
+centerpoint-geometry.train:
+	mkdir -p checkpoints/centerpoint-geometry
+	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint-geom/centerpoint_geom.py --work-dir checkpoints/centerpoint-geometry
 
 second.visualize: 
 	mkdir -p visualization/second/

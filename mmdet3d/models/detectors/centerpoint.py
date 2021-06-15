@@ -23,13 +23,15 @@ class CenterPoint(MVXTwoStageDetector):
                  img_rpn_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 pre_pointnet2_layer=None):
         super(CenterPoint,
               self).__init__(pts_voxel_layer, pts_voxel_encoder,
                              pts_middle_encoder, pts_fusion_layer,
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
+        self.pre_pointnet2_layer = pre_pointnet2_layer
 
     def extract_pts_feat(self, pts, img_feats, img_metas):
         """Extract features of points."""
