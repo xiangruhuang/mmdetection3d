@@ -48,6 +48,12 @@ centerpoint-voxel.train:
 centerpoint-geometry.train:
 	mkdir -p checkpoints/centerpoint-geometry
 	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint-geom/centerpoint_geom.py --work-dir checkpoints/centerpoint-geometry
+	
+centerpoint-voxel.dist-train:
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py 3
+
+centerpoint-geometry.dist-train:
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_geom.py 3
 
 second.visualize: 
 	mkdir -p visualization/second/
