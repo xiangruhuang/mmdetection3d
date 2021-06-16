@@ -6,9 +6,13 @@ from mmdet.models.builder import (BACKBONES, DETECTORS, HEADS, LOSSES, NECKS,
 from mmseg.models.builder import SEGMENTORS
 
 VOXEL_ENCODERS = Registry('voxel_encoder')
+PTS_ENCODERS = Registry('pts_encoder')
 MIDDLE_ENCODERS = Registry('middle_encoder')
 FUSION_LAYERS = Registry('fusion_layer')
 
+def build_pts_encoder(cfg):
+    """Build point-wise encoder."""
+    return build(cfg, PTS_ENCODERS)
 
 def build_backbone(cfg):
     """Build backbone."""

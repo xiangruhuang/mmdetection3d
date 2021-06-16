@@ -3,7 +3,7 @@ from .builder import (FUSION_LAYERS, MIDDLE_ENCODERS, VOXEL_ENCODERS,
                       build_backbone, build_detector, build_fusion_layer,
                       build_head, build_loss, build_middle_encoder,
                       build_model, build_neck, build_roi_extractor,
-                      build_shared_head, build_voxel_encoder)
+                      build_shared_head, build_voxel_encoder, build_pts_encoder)
 from .decode_heads import *  # noqa: F401,F403
 from .dense_heads import *  # noqa: F401,F403
 from .detectors import *  # noqa: F401,F403
@@ -15,10 +15,11 @@ from .necks import *  # noqa: F401,F403
 from .roi_heads import *  # noqa: F401,F403
 from .segmentors import *  # noqa: F401,F403
 from .voxel_encoders import *  # noqa: F401,F403
+from .pts_encoders import *  # noqa: F401,F403
 
 __all__ = [
-    'VOXEL_ENCODERS', 'MIDDLE_ENCODERS', 'FUSION_LAYERS', 'build_backbone',
+    'VOXEL_ENCODERS', 'MIDDLE_ENCODERS', 'FUSION_LAYERS', 'PTS_ENCODERS', 'build_backbone',
     'build_neck', 'build_roi_extractor', 'build_shared_head', 'build_head',
     'build_loss', 'build_detector', 'build_fusion_layer', 'build_model',
-    'build_middle_encoder', 'build_voxel_encoder'
+    'build_middle_encoder', 'build_voxel_encoder', 'build_pts_encoder',
 ]
