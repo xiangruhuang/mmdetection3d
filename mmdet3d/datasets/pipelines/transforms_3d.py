@@ -10,6 +10,7 @@ from ..builder import OBJECTSAMPLERS
 from .data_augment_utils import noise_per_object_v3_
 from mmdet3d.ops import Points_Sampler
 from torch_geometric.nn import fps
+from mmdet3d.ops import points_in_boxes_cpu
 
 @PIPELINES.register_module()
 class RandomFlip3D(RandomFlip):
@@ -124,6 +125,40 @@ class RandomFlip3D(RandomFlip):
         repr_str += f' flip_ratio_bev_vertical={self.flip_ratio_bev_vertical})'
         return repr_str
 
+@PIPELINES.register_module()
+class RemoveBackground(object):
+    def __call__(self, input_dict):
+        gt_bboxes_3d = input_dict['gt_bboxes_3d']
+        points = input_dict['points']
+        indices = points_in_boxes_cpu(points[:, :3].tensor, gt_bboxes_3d.tensor[:, :7])
+        input_dict['points'] = points[indices.sum(0) > 0]
+        return input_dict
+
+@PIPELINES.register_module()
+class RemoveUnusedClasses(object):
+    def __init__(self, classes):
+        self.classes = classes
+
+    def __call__(self, input_dict):
+        gt_bboxes_3d = input_dict['gt_bboxes_3d']
+        gt_names = input_dict['gt_names']
+        points = input_dict['points']
+        removed_box_indices = []
+        remain_box_indices = []
+        for i, name in enumerate(gt_names):
+            if name not in self.classes:
+                removed_box_indices.append(i)
+            else:
+                remain_box_indices.append(i)
+        input_dict['gt_names'] = input_dict['gt_names'][remain_box_indices]
+        removed_box_indices = np.array(removed_box_indices).astype(np.int32)
+        remain_box_indices = np.array(remain_box_indices).astype(np.int32)
+        indices = points_in_boxes_cpu(points[:, :3].tensor, gt_bboxes_3d.tensor[removed_box_indices, :7])
+        input_dict['points'] = points[indices.sum(0) == 0]
+        gt_bboxes_3d = gt_bboxes_3d[remain_box_indices]
+        input_dict['gt_bboxes_3d'] = gt_bboxes_3d
+        input_dict['gt_labels_3d'] = input_dict['gt_labels_3d'][remain_box_indices]
+        return input_dict
 
 @PIPELINES.register_module()
 class ObjectSample(object):
@@ -171,7 +206,7 @@ class ObjectSample(object):
         """
         gt_bboxes_3d = input_dict['gt_bboxes_3d']
         gt_labels_3d = input_dict['gt_labels_3d']
-
+        gt_names = input_dict['gt_names']
         # change to float for blending operation
         points = input_dict['points']
         if self.sample_2d:
@@ -191,9 +226,11 @@ class ObjectSample(object):
             sampled_gt_bboxes_3d = sampled_dict['gt_bboxes_3d']
             sampled_points = sampled_dict['points']
             sampled_gt_labels = sampled_dict['gt_labels_3d']
+            sampled_gt_names = sampled_dict['gt_names']
 
             gt_labels_3d = np.concatenate([gt_labels_3d, sampled_gt_labels],
                                           axis=0)
+            gt_names = np.concatenate([gt_names, sampled_gt_names])
             gt_bboxes_3d = gt_bboxes_3d.new_box(
                 np.concatenate(
                     [gt_bboxes_3d.tensor.numpy(), sampled_gt_bboxes_3d]))
@@ -218,6 +255,7 @@ class ObjectSample(object):
 
         input_dict['gt_bboxes_3d'] = gt_bboxes_3d
         input_dict['gt_labels_3d'] = gt_labels_3d.astype(np.long)
+        input_dict['gt_names'] = gt_names
         input_dict['points'] = points
 
         return input_dict

@@ -19,7 +19,7 @@ def points_in_boxes_gpu(points, boxes):
         f'Points and boxes should have the same batch size, ' \
         f'got {boxes.shape[0]} and {boxes.shape[0]}'
     assert boxes.shape[2] == 7, \
-        f'boxes dimension should be 7, ' \
+        f'boxes dimension should be >= 7, ' \
         f'got unexpected shape {boxes.shape[2]}'
     assert points.shape[2] == 3, \
         f'points dimension should be 3, ' \
@@ -28,7 +28,6 @@ def points_in_boxes_gpu(points, boxes):
 
     box_idxs_of_pts = points.new_zeros((batch_size, num_points),
                                        dtype=torch.int).fill_(-1)
-
     # If manually put the tensor 'points' or 'boxes' on a device
     # which is not the current device, some temporary variables
     # will be created on the current device in the cuda op,

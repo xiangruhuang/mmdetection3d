@@ -262,12 +262,15 @@ class DataBaseSampler(object):
 
             gt_labels = np.array([self.cat2label[s['name']] for s in sampled],
                                  dtype=np.long)
+            gt_names = [self.label2cat[i] for i in gt_labels]
 
             ret = {
                 'gt_labels_3d':
                 gt_labels,
                 'gt_bboxes_3d':
                 sampled_gt_bboxes,
+                'gt_names':
+                gt_names,
                 'points':
                 s_points_list[0].cat(s_points_list),
                 'group_ids':

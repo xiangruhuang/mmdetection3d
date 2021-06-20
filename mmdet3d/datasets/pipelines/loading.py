@@ -446,7 +446,6 @@ class LoadPointsFromFile(object):
         repr_str += f'use_dim={self.use_dim})'
         return repr_str
 
-
 @PIPELINES.register_module()
 class LoadAnnotations3D(LoadAnnotations):
     """Load Annotations3D.
@@ -523,6 +522,7 @@ class LoadAnnotations3D(LoadAnnotations):
             dict: The dict containing loaded 3D bounding box annotations.
         """
         results['gt_bboxes_3d'] = results['ann_info']['gt_bboxes_3d']
+        results['gt_names'] = results['ann_info']['gt_names']
         results['bbox3d_fields'].append('gt_bboxes_3d')
         return results
 

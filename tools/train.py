@@ -183,9 +183,7 @@ def main():
 
     logger.info(f'Model:\n{model}')
     datasets = [build_dataset(cfg.data.train)]
-    #for i in range(260, 1000):
-    #    print(i)
-    #    data = datasets[0][i]
+
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         # in case we use a dataset wrapper
