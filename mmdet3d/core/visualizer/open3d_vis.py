@@ -86,8 +86,11 @@ def _draw_bboxes(bbox3d,
         bbox3d = bbox3d.cpu().numpy()
     bbox3d = bbox3d.copy()
 
-    in_box_color = np.array(points_in_box_color)
     for i in range(len(bbox3d)):
+        if isinstance(points_in_box_color, list):
+            in_box_color = np.array(points_in_box_color[i])
+        else:
+            in_box_color = np.array(points_in_box_color)
         center = bbox3d[i, 0:3]
         dim = bbox3d[i, 3:6]
         yaw = np.zeros(3)
@@ -357,6 +360,20 @@ class Visualizer(object):
         super(Visualizer, self).__init__()
         assert 0 <= rot_axis <= 2
 
+        self.class2color = {
+                'pedestrian': (1,0,0),
+                'car': (0,0,1),
+                'truck': (0,0,1),
+                'bus': (0,0,1),
+                'trailer': (0.0,0,0),
+                'barrier': (0.0,0,0.0),
+                'motorcycle': (0, 1, 0),
+                'bicycle': (0,1,0),
+                'traffic_cone': (0,0,0),
+                'construction_vehicle': (0,0,0),
+                'Unknown': (0, 0, 0),
+            }
+
         # init visualizer
         self.o3d_visualizer = o3d.visualization.Visualizer()
         self.o3d_visualizer.create_window()
@@ -384,7 +401,7 @@ class Visualizer(object):
                          self.pcd, bbox_color, points_in_box_color, rot_axis,
                          center_mode, mode)
 
-    def add_bboxes(self, bbox3d, bbox_color=None, points_in_box_color=None):
+    def add_bboxes(self, bbox3d, bbox_color=None, points_in_box_color=None, cls_names='Unknown'):
         """Add bounding box to visualizer.
 
         Args:
@@ -395,11 +412,20 @@ class Visualizer(object):
             bbox_color (tuple[float]): the color of bbox. Defaule: None.
             points_in_box_color (tuple[float]): the color of points which
                 are in bbox3d. Defaule: None.
+            cls_name (str): the name of the class
         """
         if bbox_color is None:
             bbox_color = self.bbox_color
         if points_in_box_color is None:
-            points_in_box_color = self.points_in_box_color
+            print(cls_names)
+            if cls_names is not None:
+                points_in_box_color = []
+                for cls_name in cls_names:
+                    if self.class2color.get(cls_name, None) is None:
+                        print(cls_name)
+                    points_in_box_color.append(self.class2color.get(cls_name, self.class2color['Unknown']))
+            else:
+                points_in_box_color = self.points_in_box_color
         _draw_bboxes(bbox3d, self.o3d_visualizer, self.points_colors, self.pcd,
                      bbox_color, points_in_box_color, self.rot_axis,
                      self.center_mode, self.mode)

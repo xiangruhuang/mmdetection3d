@@ -187,4 +187,4 @@ data = dict(
     val=dict(pipeline=test_pipeline, classes=class_names),
     test=dict(pipeline=test_pipeline, classes=class_names))
 
-evaluation = dict(interval=20, pipeline=eval_pipeline)
+evaluation = dict(interval=30, pipeline=eval_pipeline)

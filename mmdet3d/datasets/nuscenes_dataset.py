@@ -554,6 +554,36 @@ class NuScenesDataset(Custom3DDataset):
                                                  Box3DMode.DEPTH)
             show_result(points, show_gt_bboxes, show_pred_bboxes, out_dir,
                         file_name, show)
+    
+    def show_data(self, idx, out_dir, show=True, pipeline=None):
+        """Data visualization.
+
+        Args:
+            idx (int): Index of the data sample to show.
+            out_dir (str): Output directory of visualization result.
+            show (bool): Visualize the results online.
+            pipeline (list[dict], optional): raw data loading for showing.
+                Default: None.
+        """
+        pipeline = self._get_pipeline(pipeline)
+        data_info = self.data_infos[idx]
+        pts_path = data_info['lidar_path']
+        points = self._extract_data(idx, pipeline, 'points').numpy()
+        #points = Coord3DMode.convert_point(points, Coord3DMode.LIDAR,
+        #                                   Coord3DMode.DEPTH)
+        ann_info = self.get_ann_info(idx)
+        gt_bboxes = ann_info['gt_bboxes_3d'].tensor.numpy()[:, :7]
+        gt_names = ann_info['gt_names']
+
+        #show_gt_bboxes = Box3DMode.convert(gt_bboxes, Box3DMode.LIDAR,
+        #                                   Box3DMode.DEPTH)
+        file_name = osp.split(pts_path)[-1].split('.')[0]
+        print(f'printing to {file_name}')
+        if sum([1 for n in gt_names if n not in ['car', 'bus', 'truck']]) < 5:
+            return False
+        show_result(points, gt_bboxes, None, out_dir,
+                    file_name, show, gt_names=gt_names)
+        return True
 
 
 def output_to_nusc_box(detection):
