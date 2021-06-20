@@ -160,8 +160,8 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=1,
-    workers_per_gpu=1,
+    samples_per_gpu=3,
+    workers_per_gpu=3,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -170,7 +170,7 @@ data = dict(
             ann_file=data_root + 'nuscenes_infos_train.pkl',
             pipeline=train_pipeline,
             classes=class_names,
-            load_interval=30,
+            load_interval=5,
             test_mode=False,
             use_valid_flag=True,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
@@ -179,4 +179,4 @@ data = dict(
     val=dict(pipeline=test_pipeline, classes=class_names),
     test=dict(pipeline=test_pipeline, classes=class_names))
 
-evaluation = dict(interval=30, pipeline=eval_pipeline)
+evaluation = dict(interval=1, pipeline=eval_pipeline)
