@@ -52,6 +52,7 @@ class Custom3DDataset(Dataset):
                  test_mode=False,
                  load_interval=1):
         super().__init__()
+        self.load_interval = load_interval
         self.data_root = data_root
         self.ann_file = ann_file
         self.test_mode = test_mode
@@ -61,7 +62,7 @@ class Custom3DDataset(Dataset):
 
         self.CLASSES = self.get_classes(classes)
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
-        self.data_infos = self.load_annotations(self.ann_file)[::load_interval]
+        self.data_infos = self.load_annotations(self.ann_file)
 
         if pipeline is not None:
             self.pipeline = Compose(pipeline)
@@ -79,7 +80,7 @@ class Custom3DDataset(Dataset):
         Returns:
             list[dict]: List of annotations.
         """
-        return mmcv.load(ann_file)
+        return mmcv.load(ann_file)[::self.load_interval]
 
     def get_data_info(self, index):
         """Get data info according to the given index.

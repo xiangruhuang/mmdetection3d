@@ -125,7 +125,8 @@ class NuScenesDataset(Custom3DDataset):
             modality=modality,
             box_type_3d=box_type_3d,
             filter_empty_gt=filter_empty_gt,
-            test_mode=test_mode)
+            test_mode=test_mode,
+	    load_interval=load_interval)
 
         self.with_velocity = with_velocity
         self.eval_version = eval_version

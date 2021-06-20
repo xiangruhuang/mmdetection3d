@@ -43,17 +43,23 @@ snet.train:
 
 centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel
-	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint/centerpoint_03voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel
+	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel
 
 centerpoint-geometry.train:
 	mkdir -p checkpoints/centerpoint-geometry
 	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint-geom/centerpoint_geom.py --work-dir checkpoints/centerpoint-geometry
 	
 centerpoint-voxel.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py 3
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py 4
 
 centerpoint-geometry.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_geom.py 3
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_geom.py 4
+
+centerpoint-voxel.dist-test:
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py work_dirs/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus/epoch_20.pth 4
+
+centerpoint-geometry.dist-test:
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint-geom/centerpoint_geom.py work_dirs/centerpoint_geom/epoch_19.pth --eval mAP --out work_dirs/centerpoint_geom/eval.pkl
 
 second.visualize: 
 	mkdir -p visualization/second/
