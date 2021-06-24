@@ -58,7 +58,7 @@ db_sampler = dict(
     classes=class_names,
     sample_groups=dict(
         car=30,
-        pedestrian=80,
+        pedestrian=30,
         ),
     points_loader=dict(
         type='LoadPointsFromFile',
@@ -160,8 +160,8 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=3,
-    workers_per_gpu=3,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -170,7 +170,7 @@ data = dict(
             ann_file=data_root + 'nuscenes_infos_train.pkl',
             pipeline=train_pipeline,
             classes=class_names,
-            load_interval=5,
+            load_interval=1,
             test_mode=False,
             use_valid_flag=True,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
