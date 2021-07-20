@@ -12,6 +12,11 @@ class_names = [
     'pedestrian', 'car'
 ]
 
+visualizer = dict(
+    type='PolyscopeVisualizer',
+    class_names=['pedestrian', 'car'],
+)
+
 model = dict(
     prevoxel_pts_layer=dict(
         type='PointNet2Encoder',

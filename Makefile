@@ -13,6 +13,7 @@ nuscenes:
 gpu=0
 gpus=0
 epoch=10
+ngpu=4
 
 checkpoints/%.pkl:
 	make -C checkpoints $(notdir $@)
@@ -49,7 +50,10 @@ centerpoint-voxel.test:
 	CUDA_VISIBLE_DEVICES=$(gpu) python tools/test.py configs/centerpoint/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus.py checkpoints/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus_20201001_135205-5db91e00.pth --show --out work_dirs/centerpoint-voxel.test.pkl --show-dir work_dirs/centerpoint-voxel-test/
 
 centerpoint-pedestrian-car.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_pedestrian_car.py 4
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_pedestrian_car.py $(ngpu)
+
+centerpoint-pedestrian-car.train:
+	CUDA_VISIBLE_DEVICES=$(gpus) python -u ./tools/train.py configs/centerpoint-geom/centerpoint_pedestrian_car.py --work-dir work_dirs/centerpoint_pedestrian_car
 
 centerpoint-geometry.train:
 	mkdir -p checkpoints/centerpoint-geometry
