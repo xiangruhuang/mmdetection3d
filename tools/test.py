@@ -131,7 +131,7 @@ def main():
     # in case the test dataset is concatenated
     samples_per_gpu = 1
     if isinstance(cfg.data.test, dict):
-        #cfg.data.test.test_mode = True
+        cfg.data.test.test_mode = True
         samples_per_gpu = cfg.data.test.pop('samples_per_gpu', 1)
         if samples_per_gpu > 1:
             # Replace 'ImageToTensor' to 'DefaultFormatBundle'
@@ -159,9 +159,6 @@ def main():
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
-    for i in range(260, 1000):
-        print(i)
-        data = dataset[i]
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
@@ -175,7 +172,6 @@ def main():
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
         wrap_fp16_model(model)
-    print('hey')
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)

@@ -10,6 +10,12 @@ nuscenes:
 		--out-dir ./data/nuscenes \
 		--extra-tag nuscenes
 
+waymo:
+	python -m tools.create_data waymo \
+		--root-path ./data/waymo \
+		--out-dir ./data/waymo \
+		--extra-tag waymo
+
 gpu=0
 gpus=0
 epoch=10
@@ -46,27 +52,27 @@ centerpoint-voxel.train:
 	mkdir -p checkpoints/centerpoint-voxel
 	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py --work-dir checkpoints/centerpoint-voxel
 
-centerpoint-voxel.test:
-	CUDA_VISIBLE_DEVICES=$(gpu) python tools/test.py configs/centerpoint/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus.py checkpoints/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus_20201001_135205-5db91e00.pth --show --out work_dirs/centerpoint-voxel.test.pkl --show-dir work_dirs/centerpoint-voxel-test/
-
-centerpoint-pedestrian-car.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_pedestrian_car.py $(ngpu)
+centerpoint-voxel.dist-test:
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus.py checkpoints/centerpoint_01voxel_second_secfpn_circlenms_4x8_cyclic_20e_nus_20201001_135205-5db91e00.pth 4
 
 centerpoint-pedestrian-car.train:
 	CUDA_VISIBLE_DEVICES=$(gpus) python -u ./tools/train.py configs/centerpoint-geom/centerpoint_pedestrian_car.py --work-dir work_dirs/centerpoint_pedestrian_car
+
+centerpoint-pedestrian-car.dist-train:
+	OMP_NUM_THREADS=3 CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_pedestrian_car.py $(ngpu)
 
 centerpoint-geometry.train:
 	mkdir -p checkpoints/centerpoint-geometry
 	CUDA_VISIBLE_DEVICES=$(gpu) python tools/train.py configs/centerpoint-geom/centerpoint_pedestrian.py --work-dir checkpoints/centerpoint-geometry
 	
 centerpoint-voxel.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py 4
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py 8
 
 centerpoint-geometry.dist-train:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_geom.py 4
+	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_train.sh configs/centerpoint-geom/centerpoint_geom.py 8
 
-centerpoint-voxel.dist-test:
-	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py work_dirs/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus/epoch_20.pth 4
+#centerpoint-voxel.dist-test:
+#	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus.py work_dirs/centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_nus/epoch_20.pth 4
 
 centerpoint-geometry.dist-test:
 	CUDA_VISIBLE_DEVICES=$(gpus) ./tools/dist_test.sh configs/centerpoint-geom/centerpoint_geom.py work_dirs/centerpoint_geom/epoch_19.pth --eval mAP --out work_dirs/centerpoint_geom/eval.pkl

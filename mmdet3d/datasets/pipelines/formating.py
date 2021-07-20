@@ -246,7 +246,7 @@ class DefaultFormatBundle3D(DefaultFormatBundle):
                     ]
                 elif 'gt_names' in results:
                     results['gt_labels'] = np.array([
-                        self.class_names.index(n) for n in results['gt_names']
+                        self.class_names.index(n) if (n in self.class_names) else -1 for n in results['gt_names']
                     ],
                                                     dtype=np.int64)
                 # we still assume one pipeline for one frame LiDAR
