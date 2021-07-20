@@ -10,6 +10,12 @@ nuscenes:
 		--out-dir ./data/nuscenes \
 		--extra-tag nuscenes
 
+waymo:
+	python -m tools.create_data waymo \
+		--root-path ./data/waymo \
+		--out-dir ./data/waymo \
+		--extra-tag waymo
+
 gpu=0
 gpus=0
 epoch=10

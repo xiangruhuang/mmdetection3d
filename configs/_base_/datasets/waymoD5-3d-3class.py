@@ -120,7 +120,7 @@ data = dict(
             # and box_type_3d='Depth' in sunrgbd and scannet dataset.
             box_type_3d='LiDAR',
             # load one frame every five frames
-            load_interval=5)),
+            load_interval=1)),
     val=dict(
         type=dataset_type,
         data_root=data_root,

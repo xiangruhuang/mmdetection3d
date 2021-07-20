@@ -57,8 +57,8 @@ db_sampler = dict(
             pedestrian=5)),
     classes=class_names,
     sample_groups=dict(
-        car=30,
-        pedestrian=30,
+        car=5,
+        pedestrian=5,
         ),
     points_loader=dict(
         type='LoadPointsFromFile',
@@ -160,8 +160,8 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
