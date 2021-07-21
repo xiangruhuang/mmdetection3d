@@ -65,14 +65,18 @@ data = dict(
     train=dict(
         type=dataset_type,
         split='training',
+        pipeline=train_pipeline,
         **shared_args),
     val=dict(
         type=dataset_type,
         split='testing',
+        pipeline=train_pipeline,
         **shared_args),
     test=dict(
         type=dataset_type,
         split='testing',
-        **shared_args),
+        pipeline=test_pipeline,
+        **shared_args)
+    )
 
 #evaluation = dict(interval=24, pipeline=eval_pipeline)
