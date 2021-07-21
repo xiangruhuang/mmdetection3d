@@ -584,7 +584,7 @@ class WaymoGTDataset(Dataset):
             self.samples[cls] = []
             self.indices[cls] = []
             for i, sample in enumerate(
-                    self.db_sampler.sampler_dict['Car']._sampled_list):
+                    self.db_sampler.sampler_dict[cls]._sampled_list):
                 if sample['num_points_in_gt'] < filter_by_points[cls]:
                     continue
                 self.samples[cls].append(sample)
