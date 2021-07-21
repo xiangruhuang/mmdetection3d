@@ -18,8 +18,8 @@ class PointNet2Head(Base3DDecodeHead):
     """
 
     def __init__(self,
-                 fp_channels=((768, 256, 256), (384, 256, 256),
-                              (320, 256, 128), (128, 128, 128, 128)),
+                 fp_channels=((512, 256, 128), (384, 256, 256),
+                              (384, 256, 128), (128, 128, 128, 128)),
                  **kwargs):
         super(PointNet2Head, self).__init__(**kwargs)
 
@@ -29,11 +29,17 @@ class PointNet2Head(Base3DDecodeHead):
             self.FP_modules.append(PointFPModule(mlp_channels=cur_fp_mlps))
 
         # https://github.com/charlesq34/pointnet2/blob/master/models/pointnet2_sem_seg.py#L40
+
+        if self.norm_cfg is not None:
+            bias=False
+        else:
+            bias=True
+
         self.pre_seg_conv = ConvModule(
             fp_channels[-1][-1],
             self.channels,
             kernel_size=1,
-            bias=True,
+            bias=bias,
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)

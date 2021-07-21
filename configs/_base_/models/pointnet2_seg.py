@@ -1,0 +1,13 @@
+model=dict(
+    type='PointNet2Seg',
+    backbone=dict(
+        type='PointNet2SASSG',
+        in_channels=3,
+        ),
+    decode_head=dict(
+        type='PointNet2Head',
+        channels=128,
+        num_classes=2,
+        dropout_ratio=0.0,
+        ),
+)

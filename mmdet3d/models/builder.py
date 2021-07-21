@@ -76,7 +76,7 @@ def build_model(cfg, train_cfg=None, test_cfg=None):
 
     Should be deprecated in the future.
     """
-    if cfg.type in ['EncoderDecoder3D']:
+    if cfg.type in ['EncoderDecoder3D', 'PointNet2Seg']:
         return build_segmentor(cfg, train_cfg=train_cfg, test_cfg=test_cfg)
     else:
         return build_detector(cfg, train_cfg=train_cfg, test_cfg=test_cfg)

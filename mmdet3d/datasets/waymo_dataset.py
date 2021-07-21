@@ -3,13 +3,15 @@ import numpy as np
 import os
 import tempfile
 import torch
-from mmcv.utils import print_log
+from mmcv.utils import print_log, build_from_cfg
 from os import path as osp
 
-from mmdet.datasets import DATASETS
-from ..core.bbox import Box3DMode, points_cam2img
+from torch.utils.data import Dataset
+from mmdet.datasets import DATASETS, PIPELINES
+from ..core.bbox import Box3DMode, points_cam2img, get_box_type
 from .kitti_dataset import KittiDataset
-
+from .builder import OBJECTSAMPLERS
+from .pipelines import Compose
 
 @DATASETS.register_module()
 class WaymoDataset(KittiDataset):
@@ -543,3 +545,251 @@ class WaymoDataset(KittiDataset):
                 label_preds=np.zeros([0, 4]),
                 sample_idx=sample_idx,
             )
+
+@DATASETS.register_module()
+class WaymoGTDataset(Dataset):
+    def __init__(self,
+                 db_sampler,
+                 box_type_3d='LiDAR',
+                 pipeline=None,
+                 test_mode=False,
+                 classes=None,
+                 split=None,
+                 gap=0.1,
+                 train_interval=8,
+                 filter_by_points=dict(Car=30, Pedestrian=30),
+                 maximum_samples=dict(Car=200, Pedestrian=200),
+                 points_loader=dict(
+                     type='LoadPointsFromFile',
+                     coord_type='LIDAR',
+                     load_dim=5,
+                     use_dim=[0,1,2])):
+        super().__init__()
+        if 'type' not in db_sampler.keys():
+            db_sampler['type'] = 'DataBaseSampler'
+        self.db_sampler = build_from_cfg(db_sampler, OBJECTSAMPLERS)
+        # self.db_sampler.sampler_dict['Car']._sampled_list
+        # self.db_sampler.data_root, self.sampler
+        self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
+        self.CLASSES = classes
+        self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
+        if pipeline is not None:
+            self.pipeline = Compose(pipeline)
+        self.test_mode = test_mode
+        self.gap = gap
+
+        self.samples = {}
+        self.indices = {}
+        for cls in classes:
+            self.samples[cls] = []
+            self.indices[cls] = []
+            for i, sample in enumerate(
+                    self.db_sampler.sampler_dict['Car']._sampled_list):
+                if sample['num_points_in_gt'] < filter_by_points[cls]:
+                    continue
+                self.samples[cls].append(sample)
+                self.indices[cls].append(i)
+                if len(self.samples[cls]) >= maximum_samples[cls]:
+                    break
+
+        import itertools
+        self.scenes = []
+        if split == 'training':
+            for cls in classes:
+                for i in range(len(self.samples[cls])):
+                    self.scenes.append({cls: i})
+            for cls1, cls2 in itertools.combinations(classes, 2):
+                for i in range(len(self.samples[cls1])):
+                    for j in range(len(self.samples[cls2])):
+                        if (i + j) % train_interval == 0:
+                            self.scenes.append({cls1: i, cls2: j})
+        else:
+            for cls1, cls2 in itertools.combinations(classes, 2):
+                for i in range(len(self.samples[cls1])):
+                    for j in range(len(self.samples[cls2])):
+                        if (i + j) % train_interval != 0:
+                            self.scenes.append({cls1: i, cls2: j})
+        
+        self.points_loader = mmcv.build_from_cfg(points_loader, PIPELINES)
+        
+        if not self.test_mode:
+            self._set_group_flag()
+   
+    def __len__(self):
+        return len(self.scenes)
+
+    def get_data_info(self, index):
+        """Get data info according to the given index.
+
+        Args:
+            index (int): Index of the sample data to get.
+
+        Returns:
+            dict: Standard input_dict consists of the
+                data information.
+
+                - sample_idx (str): sample index
+                - pts_filename (str): filename of point clouds
+                - img_prefix (str | None): prefix of image files
+                - img_info (dict): image info
+                - lidar2img (list[np.ndarray], optional): transformations from
+                    lidar to different cameras
+                - ann_info (dict): annotation info
+        """
+        scene = self.scenes[index]
+        points, gt_labels = None, None
+        for cls in self.CLASSES:
+            idx = scene.get(cls, None)
+            if idx is not None:
+                sample = self.samples[cls][idx]
+                pts_filename = os.path.join(
+                    self.db_sampler.data_root, sample['path']
+                )
+                results = dict(pts_filename=pts_filename)
+                cls_points = self.points_loader(results)['points']
+                cls_gt_labels = torch.zeros(cls_points.shape[0]).long()+self.cat2id[cls]
+                if points is None:
+                    points = cls_points
+                    gt_labels = cls_gt_labels
+                else:
+                    max0, min0 = points.tensor.max(0)[0], points.tensor.min(0)[0]
+                    #print(max0.shape, min0.shape, max0, min0)
+                    max1, min1 = cls_points.tensor.max(0)[0], cls_points.tensor.min(0)[0]
+                    #dim, sign = np.random.randint(3), np.random.randint(2)
+                    dim, sign = 0, 1
+                    if sign == 0:
+                        trans0 = max1[dim] + self.gap - min0[dim]
+                        points.tensor[:, dim] += trans0
+                    else:
+                        trans0 = min1[dim] - self.gap - max0[dim]
+                        points.tensor[:, dim] += trans0
+                    #print(points.shape, cls_points.shape, points.cat([points, cls_points]).shape)
+                    points = points.cat([points, cls_points])
+                    gt_labels = torch.cat([gt_labels, cls_gt_labels], dim=0)
+
+                points.translate(-points.tensor.mean(0)[:3])
+        input_dict = dict(
+            points = points,
+            gt_labels = gt_labels)
+
+        return input_dict
+    
+    def prepare_train_data(self, index):
+        """Training data preparation.
+
+        Args:
+            index (int): Index for accessing the target data.
+
+        Returns:
+            dict: Training data dict of the corresponding index.
+        """
+        input_dict = self.get_data_info(index)
+        #if input_dict is None:
+        #    return None
+        #self.pre_pipeline(input_dict)
+        example = self.pipeline(input_dict)
+        #if self.filter_empty_gt and \
+        #        (example is None or
+        #            ~(example['gt_labels_3d']._data != -1).any()):
+        #    return None
+        return example
+    
+    def prepare_test_data(self, index):
+        """Prepare data for testing.
+
+        Args:
+            index (int): Index for accessing the target data.
+
+        Returns:
+            dict: Testing data dict of the corresponding index.
+        """
+        input_dict = self.get_data_info(index)
+        example = self.pipeline(input_dict)
+
+        return example
+
+    def __getitem__(self, idx):
+        """Get item from infos according to the given index.
+
+        Returns:
+            dict: Data dictionary of the corresponding index.
+        """
+        if self.test_mode:
+            return self.prepare_test_data(idx)
+        while True:
+            data = self.prepare_train_data(idx)
+            if data is None:
+                idx = self._rand_another(idx)
+                continue
+            return data
+    
+    def pre_pipeline(self, results):
+        """Initialization before data preparation.
+
+        Args:
+            results (dict): Dict before data preprocessing.
+
+                - img_fields (list): Image fields.
+                - bbox3d_fields (list): 3D bounding boxes fields.
+                - pts_mask_fields (list): Mask fields of points.
+                - pts_seg_fields (list): Mask fields of point segments.
+                - bbox_fields (list): Fields of bounding boxes.
+                - mask_fields (list): Fields of masks.
+                - seg_fields (list): Segment fields.
+                - box_type_3d (str): 3D box type.
+                - box_mode_3d (str): 3D box mode.
+        """
+        results['img_fields'] = []
+        results['bbox3d_fields'] = []
+        results['pts_mask_fields'] = []
+        results['pts_seg_fields'] = []
+        results['bbox_fields'] = []
+        results['mask_fields'] = []
+        results['seg_fields'] = []
+        results['box_type_3d'] = self.box_type_3d
+        results['box_mode_3d'] = self.box_mode_3d
+    
+    def _set_group_flag(self):
+        """Set flag according to image aspect ratio.
+
+        Images with aspect ratio greater than 1 will be set as group 1,
+        otherwise group 0. In 3D datasets, they are all the same, thus are all
+        zeros.
+        """
+        self.flag = np.zeros(len(self), dtype=np.uint8)
+
+    def evaluate(self, results, logger=None, **kwargs):
+        assert len(results) == len(self.scenes)
+        acc, intersect_acc = [], []
+        for i, res_dict in enumerate(results):
+            data = self.__getitem__(i)
+            points = data['points'].data
+            y = data['gt_labels'].data
+
+            mins, maxs = {}, {}
+            for l1 in range(y.min(), y.max()+1):
+                mins[l1] = points[y == l1].min(0)[0] 
+                mins[l1][0] -= self.gap + 0.3
+                maxs[l1] = points[y == l1].max(0)[0]
+                maxs[l1][0] += self.gap + 0.3
+            intersect = (y == -1)
+            for l1 in range(y.min(), y.max()+1):
+                foreign = (y != l1)
+                mask0 = (points[:, 0] >= mins[l1][0]) & (points[:, 0] <= maxs[l1][0])
+                mask1 = (points[:, 1] >= mins[l1][1]) & (points[:, 1] <= maxs[l1][1])
+                mask2 = (points[:, 2] >= mins[l1][2]) & (points[:, 2] <= maxs[l1][2])
+                mask = mask0 & mask1 & mask2 & foreign
+                intersect = mask | intersect
+            
+            pred = res_dict['pred']
+            prob = res_dict['prob']
+            acc.append((pred == y).float())
+            intersect_acc.append((pred == y)[intersect].float())
+        acc = torch.cat(acc, dim=0).mean().item()
+        intersect_acc = torch.cat(intersect_acc, dim=0).mean().item()
+        if logger is not None:
+            logger.info(f'evaluation result: acc={acc}, intersect={intersect_acc}')
+        else:
+            print(f'evaluation result: acc={acc}, intersect={intersect_acc}')
+
+        return dict(acc=acc, intersect=intersect_acc)

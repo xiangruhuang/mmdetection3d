@@ -22,4 +22,5 @@ __all__ = [
     'build_neck', 'build_roi_extractor', 'build_shared_head', 'build_head',
     'build_loss', 'build_detector', 'build_fusion_layer', 'build_model',
     'build_middle_encoder', 'build_voxel_encoder', 'build_pts_encoder',
+    'PointNet2Seg',
 ]
