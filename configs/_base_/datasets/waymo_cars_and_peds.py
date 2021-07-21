@@ -57,7 +57,7 @@ shared_args=dict(
     visualize=False,
     train_interval=8,
     filter_by_points=dict(Car=30, Pedestrian=30),
-    maximum_samples=dict(Car=200, Pedestrian=200),
+    maximum_samples=dict(Car=100, Pedestrian=100),
 )
 data = dict(
     samples_per_gpu=8,
