@@ -595,10 +595,10 @@ class WaymoGTDataset(Dataset):
 
         import itertools
         self.scenes = []
+        for cls in classes:
+            for i in range(len(self.samples[cls])):
+                self.scenes.append({cls: i})
         if split == 'training':
-            for cls in classes:
-                for i in range(len(self.samples[cls])):
-                    self.scenes.append({cls: i})
             for cls1, cls2 in itertools.combinations(classes, 2):
                 for i in range(len(self.samples[cls1])):
                     for j in range(len(self.samples[cls2])):

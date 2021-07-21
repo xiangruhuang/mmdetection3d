@@ -103,10 +103,13 @@ def main():
         ps.remove_all_structures()
         points = data['points'].data.cpu().numpy()
         gt_labels = data['gt_labels'].data.data.cpu().numpy()
+        pred = results[i]['pred'].cpu().numpy()
+        acc = (gt_labels == pred).astype(np.float32)
+        if acc.mean() > 1 - 1e-6:
+            continue
         ptr = ps.register_point_cloud(f'sample-{i}', points)
         ptr.add_scalar_quantity('gt', gt_labels, enabled=True)
-        pred = results[i]['pred'].cpu().numpy()
-        ptr.add_scalar_quantity('equals', (gt_labels == pred).astype(np.float32), enabled=True)
+        ptr.add_scalar_quantity('equals', acc, enabled=True)
         ps.show()
         
 if __name__ == '__main__':
