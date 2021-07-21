@@ -50,26 +50,29 @@ eval_pipeline = [
     dict(type='Collect3D', keys=['points', 'gt_labels'])
 ]
 
+shared_args=dict(
+    classes=class_names,
+    db_sampler=db_sampler,
+    gap=0.1,
+    visualize=False,
+    train_interval=8,
+    filter_by_points=dict(Car=30, Pedestrian=30),
+    maximum_samples=dict(Car=200, Pedestrian=200),
+)
 data = dict(
     samples_per_gpu=8,
     workers_per_gpu=5,
     train=dict(
         type=dataset_type,
         split='training',
-        db_sampler=db_sampler,
-        pipeline=train_pipeline,
-        classes=class_names),
+        **shared_args),
     val=dict(
         type=dataset_type,
         split='testing',
-        db_sampler=db_sampler,
-        pipeline=train_pipeline,
-        classes=class_names),
+        **shared_args),
     test=dict(
         type=dataset_type,
         split='testing',
-        db_sampler=db_sampler,
-        pipeline=test_pipeline,
-        classes=class_names))
+        **shared_args),
 
 #evaluation = dict(interval=24, pipeline=eval_pipeline)
