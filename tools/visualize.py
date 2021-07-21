@@ -1,13 +1,18 @@
-import polyscope as ps; ps.init()
+import argparse
+import polyscope as ps
+import pickle
+import os
+import numpy as np
+
 from mmcv import Config, DictAction
 from mmdet3d.datasets import build_dataloader, build_dataset
-import pickle
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Visualize Results')
     parser.add_argument('config', help='test config file path')
-    parser.add_argument('--result', help='saved result file in pickle format')
+    parser.add_argument('result', help='saved result file in pickle format')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -87,19 +92,22 @@ def parse_args():
     return args
 
 def main():
+    args = parse_args()
+    ps.init()
     cfg = Config.fromfile(args.config)
     dataset = build_dataset(cfg.data.test)
-    with open(cfg.result, 'rb') as fin:
+    print(dataset.CLASSES)
+    with open(args.result, 'rb') as fin:
         results = pickle.load(fin)
     for i, data in enumerate(dataset):
-        import ipdb; ipdb.set_trace()
         ps.remove_all_structures()
         points = data['points'].data.cpu().numpy()
         gt_labels = data['gt_labels'].data.data.cpu().numpy()
         ptr = ps.register_point_cloud(f'sample-{i}', points)
         ptr.add_scalar_quantity('gt', gt_labels, enabled=True)
-        ptr.add_scalar_quantity('equals', (gt_labels == results[i]['pred']).float(), enabled=True)
+        pred = results[i]['pred'].cpu().numpy()
+        ptr.add_scalar_quantity('equals', (gt_labels == pred).astype(np.float32), enabled=True)
         ps.show()
         
-
-pickle.load('')
+if __name__ == '__main__':
+    main()

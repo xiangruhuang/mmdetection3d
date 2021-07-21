@@ -556,6 +556,7 @@ class WaymoGTDataset(Dataset):
                  classes=None,
                  split=None,
                  gap=0.1,
+                 visualize=True,
                  train_interval=8,
                  filter_by_points=dict(Car=30, Pedestrian=30),
                  maximum_samples=dict(Car=200, Pedestrian=200),
@@ -584,7 +585,7 @@ class WaymoGTDataset(Dataset):
             self.samples[cls] = []
             self.indices[cls] = []
             for i, sample in enumerate(
-                    self.db_sampler.sampler_dict['Car']._sampled_list):
+                    self.db_sampler.sampler_dict[cls]._sampled_list):
                 if sample['num_points_in_gt'] < filter_by_points[cls]:
                     continue
                 self.samples[cls].append(sample)
@@ -614,6 +615,22 @@ class WaymoGTDataset(Dataset):
         
         if not self.test_mode:
             self._set_group_flag()
+        if visualize:
+            import polyscope as ps
+            ps.init()
+            for cls in classes:
+                print(f'visualizing class={cls}')
+                ps.remove_all_structures()
+                for idx, sample in enumerate(self.samples[cls]):
+                    pts_filename = os.path.join(
+                        self.db_sampler.data_root, sample['path']
+                    )
+                    print(pts_filename)
+                    results = dict(pts_filename=pts_filename)
+                    cls_points = self.points_loader(results)['points'].tensor.cpu().numpy()
+                    cls_points += np.array([(idx // 15) * 5, 0, (idx % 15) * 5])
+                    ps.register_point_cloud(f'sample-{idx}', cls_points)
+                ps.show()
    
     def __len__(self):
         return len(self.scenes)
@@ -641,10 +658,12 @@ class WaymoGTDataset(Dataset):
         for cls in self.CLASSES:
             idx = scene.get(cls, None)
             if idx is not None:
+                print(f'using sample {idx} from class {cls}')
                 sample = self.samples[cls][idx]
                 pts_filename = os.path.join(
                     self.db_sampler.data_root, sample['path']
                 )
+                print(f'loading from {pts_filename}')
                 results = dict(pts_filename=pts_filename)
                 cls_points = self.points_loader(results)['points']
                 cls_gt_labels = torch.zeros(cls_points.shape[0]).long()+self.cat2id[cls]
