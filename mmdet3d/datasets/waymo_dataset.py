@@ -556,7 +556,7 @@ class WaymoGTDataset(Dataset):
                  classes=None,
                  split=None,
                  gap=0.1,
-                 visualize=True,
+                 visualize=False,
                  train_interval=8,
                  filter_by_points=dict(Car=30, Pedestrian=30),
                  maximum_samples=dict(Car=200, Pedestrian=200),
@@ -658,12 +658,10 @@ class WaymoGTDataset(Dataset):
         for cls in self.CLASSES:
             idx = scene.get(cls, None)
             if idx is not None:
-                print(f'using sample {idx} from class {cls}')
                 sample = self.samples[cls][idx]
                 pts_filename = os.path.join(
                     self.db_sampler.data_root, sample['path']
                 )
-                print(f'loading from {pts_filename}')
                 results = dict(pts_filename=pts_filename)
                 cls_points = self.points_loader(results)['points']
                 cls_gt_labels = torch.zeros(cls_points.shape[0]).long()+self.cat2id[cls]
