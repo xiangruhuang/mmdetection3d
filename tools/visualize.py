@@ -99,17 +99,35 @@ def main():
     print(dataset.CLASSES)
     with open(args.result, 'rb') as fin:
         results = pickle.load(fin)
+    R = np.array([[1, 0, 0], [0, 0, 1], [0,-1,0]])
     for i, data in enumerate(dataset):
         ps.remove_all_structures()
+        scene = dataset.scenes[i]
+        name=f'sample-{i}'
+        if len(scene.keys()) <= 1:
+            continue
+        for k, val in scene.items():
+            name += f'-{k}-{val}'
+            dataset.samples[k][val]
+            points = dataset.load_points(k, val).tensor.cpu().numpy()
+            points = R.dot(points.T).T
+            ptr = ps.register_point_cloud(f'{k}-{val}', points+np.array([10, 0, 10*dataset.cat2id[k]]))
+            idx = dataset.cat2id[k] * 100 + val
+            gt_labels = dataset[idx]['gt_labels'].data.cpu().numpy()
+            pred = results[idx]['pred'].cpu().numpy()
+            acc = (gt_labels == pred).astype(np.float32)
+            ptr.add_scalar_quantity('acc', acc, enabled=True)
+            
         points = data['points'].data.cpu().numpy()
-        gt_labels = data['gt_labels'].data.data.cpu().numpy()
+        points = R.dot(points.T).T
+        gt_labels = data['gt_labels'].data.cpu().numpy()
         pred = results[i]['pred'].cpu().numpy()
         acc = (gt_labels == pred).astype(np.float32)
         if acc.mean() > 1 - 1e-6:
             continue
         ptr = ps.register_point_cloud(f'sample-{i}', points)
         ptr.add_scalar_quantity('gt', gt_labels, enabled=True)
-        ptr.add_scalar_quantity('equals', acc, enabled=True)
+        ptr.add_scalar_quantity('acc', acc, enabled=True)
         ps.show()
         
 if __name__ == '__main__':
