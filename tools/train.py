@@ -183,6 +183,7 @@ def main():
 
     #logger.info(f'Model:\n{model}')
     datasets = [build_dataset(cfg.data.train)]
+    logger.info(f'Training Dataset:\n{datasets[0]}')
 
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)

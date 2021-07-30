@@ -326,13 +326,14 @@ def get_waymo_image_info(path,
             training,
             relative_path,
             info_type='image_0',
-            use_prefix_id=True)
-        if with_imageshape:
-            img_path = image_info['image_path']
-            if relative_path:
-                img_path = str(root_path / img_path)
-            image_info['image_shape'] = np.array(
-                io.imread(img_path).shape[:2], dtype=np.int32)
+            use_prefix_id=True,
+            exist_check=False)
+        #if with_imageshape:
+        #    img_path = image_info['image_path']
+        #    if relative_path:
+        #        img_path = str(root_path / img_path)
+        #    image_info['image_shape'] = np.array(
+        #        io.imread(img_path).shape[:2], dtype=np.int32)
         if label_info:
             label_path = get_label_path(
                 idx,

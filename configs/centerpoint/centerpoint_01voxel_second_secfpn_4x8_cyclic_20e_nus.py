@@ -101,32 +101,26 @@ test_pipeline = [
         file_client_args=file_client_args,
         pad_empty_sweeps=True,
         remove_close=True),
-    #dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True),
     dict(
-        type='DefaultFormatBundle3D',
-        class_names=class_names,
-        with_label=False),
-    dict(type='Collect3D', keys=['points'])
-    #dict(
-    #    type='MultiScaleFlipAug3D',
-    #    img_scale=(1333, 800),
-    #    pts_scale_ratio=1,
-    #    flip=False,
-    #    transforms=[
-    #        dict(
-    #            type='GlobalRotScaleTrans',
-    #            rot_range=[0, 0],
-    #            scale_ratio_range=[1., 1.],
-    #            translation_std=[0, 0, 0]),
-    #        dict(type='RandomFlip3D'),
-    #        dict(
-    #            type='PointsRangeFilter', point_cloud_range=point_cloud_range),
-    #        dict(
-    #            type='DefaultFormatBundle3D',
-    #            class_names=class_names,
-    #            with_label=True),
-    #        dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d', 'gt_names'])
-    #    ])
+        type='MultiScaleFlipAug3D',
+        img_scale=(1333, 800),
+        pts_scale_ratio=1,
+        flip=False,
+        transforms=[
+            dict(
+                type='GlobalRotScaleTrans',
+                rot_range=[0, 0],
+                scale_ratio_range=[1., 1.],
+                translation_std=[0, 0, 0]),
+            dict(type='RandomFlip3D'),
+            dict(
+                type='PointsRangeFilter', point_cloud_range=point_cloud_range),
+            dict(
+                type='DefaultFormatBundle3D',
+                class_names=class_names,
+                with_label=True),
+            dict(type='Collect3D', keys=['points'])
+        ])
 ]
 # construct a pipeline for data and gt loading in show function
 # please keep its loading function consistent with test_pipeline (e.g. client)

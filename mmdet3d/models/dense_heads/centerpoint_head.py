@@ -536,11 +536,14 @@ class CenterHead(nn.Module):
                     ind[new_idx] = y * feature_map_size[0] + x
                     mask[new_idx] = 1
                     # TODO: support other outdoor dataset
-                    vx, vy = task_boxes[idx][k][7:]
                     rot = task_boxes[idx][k][6]
                     box_dim = task_boxes[idx][k][3:6]
                     if self.norm_bbox:
                         box_dim = box_dim.log()
+                    if task_boxes[idx][k].shape[0] > 7:
+                        vx, vy = task_boxes[idx][k][7:]
+                    else:
+                        vx, vy = torch.zeros_like(rot), torch.zeros_like(rot)
                     anno_box[new_idx] = torch.cat([
                         center - torch.tensor([x, y], device=device),
                         z.unsqueeze(0), box_dim,
@@ -549,6 +552,7 @@ class CenterHead(nn.Module):
                         vx.unsqueeze(0),
                         vy.unsqueeze(0)
                     ])
+
 
             heatmaps.append(heatmap)
             anno_boxes.append(anno_box)

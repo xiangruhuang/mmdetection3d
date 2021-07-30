@@ -178,8 +178,10 @@ def waymo_data_prep(root_path,
     """
     from tools.data_converter import waymo_converter as waymo
 
-    splits = ['training', 'validation', 'testing']
-    for i, split in enumerate(splits):
+    #splits = [(0, 'training')]#[(2, 'testing')] #['training', 'validation', 'testing']
+    #splits = [(2, 'testing')]#[(2, 'testing')] #['training', 'validation', 'testing']
+    splits = [(1, 'validation')]#[(2, 'testing')] #['training', 'validation', 'testing']
+    for i, split in splits:
         load_dir = osp.join(root_path, 'waymo_format', split)
         if split == 'validation':
             save_dir = osp.join(out_dir, 'kitti_format', 'training')
@@ -193,15 +195,15 @@ def waymo_data_prep(root_path,
             test_mode=(split == 'test'))
         converter.convert()
     # Generate waymo infos
-    out_dir = osp.join(out_dir, 'kitti_format')
-    kitti.create_waymo_info_file(out_dir, info_prefix, max_sweeps=max_sweeps)
-    create_groundtruth_database(
-        'WaymoDataset',
-        out_dir,
-        info_prefix,
-        f'{out_dir}/{info_prefix}_infos_train.pkl',
-        relative_path=False,
-        with_mask=False)
+    #out_dir = osp.join(out_dir, 'kitti_format')
+    #kitti.create_waymo_info_file(out_dir, info_prefix, max_sweeps=max_sweeps)
+    #create_groundtruth_database(
+    #    'WaymoDataset',
+    #    out_dir,
+    #    info_prefix,
+    #    f'{out_dir}/{info_prefix}_infos_train.pkl',
+    #    relative_path=False,
+    #    with_mask=False)
 
 
 parser = argparse.ArgumentParser(description='Data converter arg parser')
@@ -231,7 +233,7 @@ parser.add_argument(
     help='name of info pkl')
 parser.add_argument('--extra-tag', type=str, default='kitti')
 parser.add_argument(
-    '--workers', type=int, default=4, help='number of threads to be used')
+    '--workers', type=int, default=40, help='number of threads to be used')
 args = parser.parse_args()
 
 if __name__ == '__main__':

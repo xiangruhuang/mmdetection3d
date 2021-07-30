@@ -12,6 +12,8 @@ from ..core.bbox import Box3DMode, points_cam2img, get_box_type
 from .kitti_dataset import KittiDataset
 from .builder import OBJECTSAMPLERS
 from .pipelines import Compose
+from mmdet3d.ops import knn
+from torch_geometric.nn import knn as knn_cpu
 
 @DATASETS.register_module()
 class WaymoDataset(KittiDataset):
@@ -556,10 +558,13 @@ class WaymoGTDataset(Dataset):
                  classes=None,
                  split=None,
                  gap=0.1,
+                 load_interval=1,
                  visualize=False,
                  train_interval=8,
                  filter_by_points=dict(Car=30, Pedestrian=30),
                  maximum_samples=dict(Car=200, Pedestrian=200),
+                 use_single=True,
+                 use_couple=True,
                  points_loader=dict(
                      type='LoadPointsFromFile',
                      coord_type='LIDAR',
@@ -595,22 +600,29 @@ class WaymoGTDataset(Dataset):
 
         import itertools
         self.scenes = []
-        for cls in classes:
-            for i in range(len(self.samples[cls])):
-                self.scenes.append({cls: i})
-        if split == 'training':
-            for cls1, cls2 in itertools.combinations(classes, 2):
-                for i in range(len(self.samples[cls1])):
-                    for j in range(len(self.samples[cls2])):
-                        if (i + j) % train_interval == 0:
-                            self.scenes.append({cls1: i, cls2: j})
-        else:
-            for cls1, cls2 in itertools.combinations(classes, 2):
-                for i in range(len(self.samples[cls1])):
-                    for j in range(len(self.samples[cls2])):
-                        if (i + j) % train_interval != 0:
-                            self.scenes.append({cls1: i, cls2: j})
-        
+        # Single Object Scenes
+        if use_single:
+            for cls in classes:
+                for i in range(len(self.samples[cls])):
+                    self.scenes.append({cls: i})
+
+        if use_couple:
+            if split == 'training':
+                for cls1, cls2 in itertools.combinations(classes, 2):
+                    for i in range(len(self.samples[cls1])):
+                        for j in range(len(self.samples[cls2])):
+                            if (i + j) % train_interval == 0:
+                                self.scenes.append({cls1: i, cls2: j})
+            else:
+                for cls1, cls2 in itertools.combinations(classes, 2):
+                    for i in range(len(self.samples[cls1])):
+                        for j in range(len(self.samples[cls2])):
+                            if (i + j) % train_interval != 0:
+                                self.scenes.append({cls1: i, cls2: j})
+       
+        self.scenes = self.scenes[::load_interval]
+        self.trans = {}
+
         self.points_loader = mmcv.build_from_cfg(points_loader, PIPELINES)
         
         if not self.test_mode:
@@ -672,15 +684,26 @@ class WaymoGTDataset(Dataset):
                     max0, min0 = points.tensor.max(0)[0], points.tensor.min(0)[0]
                     #print(max0.shape, min0.shape, max0, min0)
                     max1, min1 = cls_points.tensor.max(0)[0], cls_points.tensor.min(0)[0]
-                    #dim, sign = np.random.randint(3), np.random.randint(2)
-                    dim, sign = 0, 1
-                    if sign == 0:
-                        trans0 = max1[dim] + self.gap - min0[dim]
-                        points.tensor[:, dim] += trans0
+                    dim, sign = np.random.randint(3), np.random.randint(2)
+                    trans = self.trans.get((index, cls, dim, sign), None)
+                    if trans is None:
+                        trans = torch.zeros(3)
+                        if sign == 0:
+                            trans[dim] = -(max1[dim] + self.gap - min0[dim])
+                        else:
+                            trans[dim] = -(min1[dim] - self.gap - max0[dim])
+                        cls_points.tensor += trans
+                        _, indices = knn_cpu(points.tensor, cls_points.tensor, k=1)
+                        min_dist = (cls_points.tensor - points.tensor[indices]).norm(p=2, dim=-1)
+                        idx = min_dist.argmin()
+                        dr = points.tensor[indices[idx]] - cls_points.tensor[idx]
+                        unit_dr = dr / dr.norm(p=2, dim=-1)
+                        trans_i = unit_dr * (min_dist.min() - self.gap)
+                        trans += trans_i
+                        cls_points.translate(trans_i)
+                        self.trans[(index, cls, dim, sign)] = trans
                     else:
-                        trans0 = min1[dim] - self.gap - max0[dim]
-                        points.tensor[:, dim] += trans0
-                    #print(points.shape, cls_points.shape, points.cat([points, cls_points]).shape)
+                        cls_points.translate(trans)
                     points = points.cat([points, cls_points])
                     gt_labels = torch.cat([gt_labels, cls_gt_labels], dim=0)
 
@@ -777,36 +800,48 @@ class WaymoGTDataset(Dataset):
 
     def evaluate(self, results, logger=None, **kwargs):
         assert len(results) == len(self.scenes)
-        acc, intersect_acc = [], []
+        acc, intersect_acc, dist2set = [], [], []
         for i, res_dict in enumerate(results):
             data = self.__getitem__(i)
             points = data['points'].data
             y = data['gt_labels'].data
-
-            mins, maxs = {}, {}
-            for l1 in range(y.min(), y.max()+1):
-                mins[l1] = points[y == l1].min(0)[0] 
-                mins[l1][0] -= self.gap + 0.3
-                maxs[l1] = points[y == l1].max(0)[0]
-                maxs[l1][0] += self.gap + 0.3
-            intersect = (y == -1)
-            for l1 in range(y.min(), y.max()+1):
-                foreign = (y != l1)
-                mask0 = (points[:, 0] >= mins[l1][0]) & (points[:, 0] <= maxs[l1][0])
-                mask1 = (points[:, 1] >= mins[l1][1]) & (points[:, 1] <= maxs[l1][1])
-                mask2 = (points[:, 2] >= mins[l1][2]) & (points[:, 2] <= maxs[l1][2])
-                mask = mask0 & mask1 & mask2 & foreign
-                intersect = mask | intersect
-            
             pred = res_dict['pred']
             prob = res_dict['prob']
             acc.append((pred == y).float())
-            intersect_acc.append((pred == y)[intersect].float())
-        acc = torch.cat(acc, dim=0).mean().item()
-        intersect_acc = torch.cat(intersect_acc, dim=0).mean().item()
-        if logger is not None:
-            logger.info(f'evaluation result: acc={acc}, intersect={intersect_acc}')
-        else:
-            print(f'evaluation result: acc={acc}, intersect={intersect_acc}')
 
-        return dict(acc=acc, intersect=intersect_acc)
+            intersect = (y == -1)
+            dist = torch.zeros_like(intersect, dtype=torch.float) + 1e5
+            if y.min() < y.max():
+                for l1 in range(y.min(), y.max()+1):
+                    p0 = points[y == l1].cuda()
+                    p1 = points[y != l1].cuda()
+                    indices = knn(1, p1.unsqueeze(0), p0.unsqueeze(0))
+                    dists = (p1[indices[0, 0]] - p0).norm(p=2, dim=-1).cpu()
+                    dist[y == l1] = dists
+                    #mask = (dists < 0.2)
+                    #intersect[y == l1] = mask
+                #intersect_acc.append((pred == y)[intersect].float())
+            dist2set.append(dist)
+            
+        acc = torch.cat(acc, dim=0)
+        dist = torch.cat(dist2set, dim=0)
+        ranges = torch.linspace(dist.min(), 0.5, 10)
+        ranges = torch.cat([ranges, torch.zeros_like(ranges[0:1]) + 1e10])
+        msg = f' acc={acc.mean().item():.4f}'
+        for i, r in enumerate(ranges[1:]):
+            l = ranges[i]
+            acc_lr = acc[(dist <= r) & (dist >= l)].mean()
+            ratio = ((dist <= r) & (dist >= l)).float().mean()
+            msg += f', [{l:.3f}, {r:.3f}] ({ratio:.4f})={acc_lr:.4f}'
+        #intersect_acc = torch.cat(intersect_acc, dim=0)
+        acc = acc.mean().item()
+        #intersect_acc = intersect_acc.mean().item()
+        if logger is not None:
+            logger.info(msg)
+        else:
+            print(msg)
+
+        return dict(acc=acc)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}: scenes={len(self.scenes)}'

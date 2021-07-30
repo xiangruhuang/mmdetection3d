@@ -1,10 +1,10 @@
-checkpoint_config = dict(interval=50)
+checkpoint_config = dict(interval=5)
 # yapf:disable push
 # By default we use textlogger hook and tensorboard
 # For more loggers see
 # https://mmcv.readthedocs.io/en/latest/api.html#mmcv.runner.LoggerHook
 log_config = dict(
-    interval=40,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')

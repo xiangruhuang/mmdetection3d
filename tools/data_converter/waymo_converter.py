@@ -113,7 +113,7 @@ class Waymo2KITTI(object):
                     not in self.selected_waymo_locations):
                 continue
 
-            self.save_image(frame, file_idx, frame_idx)
+            #self.save_image(frame, file_idx, frame_idx)
             self.save_calib(frame, file_idx, frame_idx)
             self.save_lidar(frame, file_idx, frame_idx)
             self.save_pose(frame, file_idx, frame_idx)

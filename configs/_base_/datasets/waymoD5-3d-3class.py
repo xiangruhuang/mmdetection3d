@@ -142,4 +142,4 @@ data = dict(
         test_mode=True,
         box_type_3d='LiDAR'))
 
-evaluation = dict(interval=24, pipeline=eval_pipeline)
+evaluation = dict(interval=1, pipeline=eval_pipeline)

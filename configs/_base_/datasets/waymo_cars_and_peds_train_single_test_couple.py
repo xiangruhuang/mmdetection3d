@@ -57,34 +57,34 @@ shared_args=dict(
     visualize=False,
     train_interval=10,
     filter_by_points=dict(Car=30, Pedestrian=30),
-    maximum_samples=dict(Car=100, Pedestrian=100),
+    maximum_samples=dict(Car=300, Pedestrian=300),
 )
 data = dict(
-    samples_per_gpu=8,
-    workers_per_gpu=5,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(
         type=dataset_type,
         split='training',
         pipeline=train_pipeline,
         use_single=True,
-        use_couple=True,
+        use_couple=False,
         load_interval=1,
         **shared_args),
     val=dict(
         type=dataset_type,
         split='testing',
         pipeline=train_pipeline,
-        use_single=True,
+        use_single=False,
         use_couple=True,
-        load_interval=100,
+        load_interval=50,
         **shared_args),
     test=dict(
         type=dataset_type,
         split='testing',
-        use_single=True,
+        use_single=False,
         use_couple=True,
         pipeline=test_pipeline,
-        load_interval=100,
+        load_interval=50,
         **shared_args)
     )
 
