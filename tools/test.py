@@ -213,7 +213,6 @@ def main():
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             with open('results/{}'.format(args.logfile), 'wb') as fout:
                 result_dict = dataset.evaluate(outputs, **eval_kwargs)
-                #import ipdb; ipdb.set_trace()
                 print('saving evaluation results to results/{}'.format(args.logfile))
                 import pickle
                 pickle.dump(result_dict, fout)

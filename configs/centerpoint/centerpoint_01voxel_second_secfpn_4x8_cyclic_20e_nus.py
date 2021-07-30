@@ -9,8 +9,8 @@ _base_ = [
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 # For nuScenes we usually do 10-class detection
 class_names = [
-    'car',
-    'pedestrian',
+    'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
+    'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
 ]
 
 model = dict(
@@ -33,20 +33,28 @@ db_sampler = dict(
         filter_by_difficulty=[-1],
         filter_by_min_points=dict(
             car=5,
-            truck=5e5,
-            bus=5e5,
-            trailer=5e5,
-            construction_vehicle=5e5,
-            traffic_cone=5e5,
-            barrier=5e5,
-            motorcycle=5e5,
-            bicycle=5e5,
-            pedestrian=5)),
+            truck=5,
+            construction_vehicle=5,
+            bus=5,
+            trailer=5,
+            barrier=5,
+            motorcycle=5,
+            bicycle=5,
+            pedestrian=5,
+            traffic_cone=5)
+        ),
     classes=class_names,
     sample_groups=dict(
-        car=30,
-        pedestrian=30,
-        ),
+        car=2,
+        truck=3,
+        construction_vehicle=7,
+        bus=4,
+        trailer=6,
+        barrier=2,
+        motorcycle=6,
+        bicycle=6,
+        pedestrian=2,
+        traffic_cone=2),
     points_loader=dict(
         type='LoadPointsFromFile',
         coord_type='LIDAR',
@@ -146,8 +154,8 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=1,
-    workers_per_gpu=1,
+    samples_per_gpu=3,
+    workers_per_gpu=3,
     train=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -165,4 +173,4 @@ data = dict(
     val=dict(pipeline=test_pipeline, classes=class_names),
     test=dict(pipeline=test_pipeline, classes=class_names))
 
-evaluation = dict(interval=1, pipeline=eval_pipeline)
+evaluation = dict(interval=10, pipeline=eval_pipeline)
