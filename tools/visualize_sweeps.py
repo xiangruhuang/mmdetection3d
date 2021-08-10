@@ -1,9 +1,9 @@
 
 import argparse
-import polyscope as ps
 import pickle
 import os
 import numpy as np
+import torch
 
 from mmcv import Config, DictAction
 from mmdet3d.datasets import build_dataloader, build_dataset
@@ -94,12 +94,19 @@ def parse_args():
 
 def main():
     args = parse_args()
-    ps.init()
     cfg = Config.fromfile(args.config)
     dataset = build_dataset(cfg.data.train)
+    data_loader = build_dataloader(
+            dataset,
+            1,
+            1,
+            # cfg.gpus will be ignored if distributed
+            1,
+            dist=True,
+            seed=816)
 
-    for i, data in enumerate(dataset):
-        print(i, len(dataset))
+    for i, data in enumerate(data_loader):
+        print(i, len(data_loader))
 
 if __name__ == '__main__':
     main()
