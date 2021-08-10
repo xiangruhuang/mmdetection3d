@@ -1,6 +1,7 @@
 import numpy as np
 from mmcv import is_tuple_of
 from mmcv.utils import build_from_cfg
+import torch
 
 from mmdet3d.core import VoxelGenerator
 from mmdet3d.core.bbox import box_np_ops
@@ -9,8 +10,414 @@ from mmdet.datasets.pipelines import RandomFlip
 from ..builder import OBJECTSAMPLERS
 from .data_augment_utils import noise_per_object_v3_
 from mmdet3d.ops import Points_Sampler
-from torch_geometric.nn import fps
+from torch_geometric.nn import knn, fps, radius, knn_interpolate
 from mmdet3d.ops import points_in_boxes_cpu
+import polyscope as ps; ps.init()
+import open3d as o3d
+#from pytorch3d.transforms.rotation_conversions import \
+#    matrix_to_quaternion, quaternion_to_matrix, \
+#    quaternion_to_axis_angle, axis_angle_to_quaternion
+from geop import icp_reweighted, batched_icp
+from geop import matrix_to_axis_angle, axis_angle_to_matrix
+import geop.geometry.util as gutil
+
+@PIPELINES.register_module()
+class EstimateMotionMask(object):
+    def __init__(self,
+                 sweeps_num=10,
+                 points_loader=None,
+                 points_range_filter=None):
+        if points_loader is not None:
+            self.points_loader = build_from_cfg(points_loader, PIPELINES)
+        if points_range_filter is not None:
+            self.points_range_filter = build_from_cfg(points_range_filter, PIPELINES)
+        self.counter = 0
+
+    def _load_points(self, pts_filename):
+        inp = dict(pts_filename=pts_filename)
+        return self.points_loader(inp)['points']
+
+    def _range_filter(self, points):
+        inp = dict(points=points)
+        return self.points_range_filter(inp)['points']
+
+    def graph_cut_overseg(self, points, l, r, num_clusters):
+        from torch_geometric.data import Data
+        from torch_geometric.transforms import GridSampling
+        clusters = GridSampling(0.2)(Data(pos=points)).pos
+        #cluster_idx = fps(points.cuda(), ratio=10000 / points.shape[0]).detach().cpu()
+        #clusters = points[cluster_idx]
+        ps_clusters = ps.register_point_cloud('clusters', clusters, radius=4e-4)
+        e0_r, e1_r = radius(clusters, clusters, 0.5, max_num_neighbors=1280)
+        #L = torch.zeros(clusters.shape[0], clusters.shape[0])
+        from scipy.sparse import csr_matrix
+        import scipy
+        G = csr_matrix((np.ones_like(e0_r.numpy()), (e0_r.numpy(), e1_r.numpy())),
+                        shape=(clusters.shape[0], clusters.shape[0]))
+        num_comp, comp_labels = scipy.sparse.csgraph.connected_components(G, directed=False)
+        e0, e1 = knn(clusters, points, 1)
+        return comp_labels[e1]
+
+        #sigma2 = 0.5**2
+        #weights = (-(clusters[e0_r] - clusters[e1_r]).square().sum(-1) / sigma2).exp()
+        #L[(e0_r, e1_r)] = weights
+        #L[(e1_r, e0_r)] = weights
+        #L[(e1_r, e1_r)] = 0
+        #L = (L.T + L)/2.0
+        #import ipdb; ipdb.set_trace()
+        #colors = torch.randn(num_comp, 3)
+        #ps_clusters.add_color_quantity('components', colors[comp_labels])
+        #ps.show()
+        #D_diag = L.sum(-1)
+        #D_diag_inv = D_diag
+        #valid_mask = (D_diag > 1e-6)
+        #D_diag_inv[valid_mask] = 1.0/D_diag_inv[valid_mask]
+        #Dinv_half = D_diag_inv.sqrt().cuda()
+        #L = L.cuda()
+        #L_c = torch.eye(L.shape[0]).to(L) - Dinv_half * L * Dinv_half.unsqueeze(-1)
+        #eigvals, eigvecs = torch.linalg.eigh(L_c.double())
+        #eigvals, eigvecs = eigvals.float(), eigvecs.float()
+        #for i in range(100):
+        #    ps_clusters.add_scalar_quantity(f'eig-{i}', (eigvecs[:, i].abs()+1e-6).log().detach().cpu().numpy())
+        #ps.show()
+        #feats = torch.cat([clusters, eigvecs[:, l:r].float()], dim=-1)
+        #seg_idx = fps(feats, ratio=num_clusters/feats.shape[0])
+        #e0_seg, e1_seg = knn(feats[seg_idx], feats, 1)
+        #colors = torch.randn(seg_idx.shape[0], 3)
+        #ps_clusters.add_color_quantity('graph-cut-segmentation', colors[e1_seg])
+        #ps.show()
+
+    def recursive_segment(self, points, ref_points_list, segments):
+        ref_list, normals_list = [], []
+        ps.remove_all_structures()
+        for i, ref_points in enumerate(ref_points_list):
+            ps_ref = ps.register_point_cloud(f'ref-{i}', ref_points, radius=2e-4)
+            ref = o3d.geometry.PointCloud()
+            ref.points = o3d.utility.Vector3dVector(ref_points)
+            ref.estimate_normals(
+                search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2,
+                max_nn=30))
+            normals_list.append(np.array(ref.normals))
+            ref_list.append(ref)
+        ps_points = ps.register_point_cloud('points', points, radius=2e-4)
+        for key in segments.keys():
+            ps.register_point_cloud(f'seg-{key}', points[segments[key]], radius=4e-4)
+        point2cluster = self.graph_cut_overseg(points, 0, 300, 300)
+        num_cluster = point2cluster.max()+1
+        #cluster_idx = fps(points.cuda(), ratio=10000 / points.shape[0]).detach().cpu()
+        #clusters = points[cluster_idx]
+        #ps_clusters = ps.register_point_cloud('clusters', points[cluster_idx], radius=4e-4)
+        #e0_r, e1_r = radius(clusters, clusters, 0.5, max_num_neighbors=1280)
+        #L = torch.zeros(clusters.shape[0], clusters.shape[0])
+        #sigma2 = 0.5**2
+        #weights = (-(clusters[e0_r] - clusters[e1_r]).square().sum(-1) / sigma2).exp()
+        #L[(e0_r, e1_r)] = weights
+        #L[(e1_r, e0_r)] = weights
+        #L[(e1_r, e1_r)] = 0
+        #L = (L.T + L)/2.0
+        #D_diag = L.sum(-1)
+        #D_diag_inv = D_diag
+        #valid_mask = (D_diag > 1e-6)
+        #D_diag_inv[valid_mask] = 1.0/D_diag_inv[valid_mask]
+        #Dinv_half = torch.diag(D_diag_inv.sqrt())
+        #L_c = torch.eye(L.shape[0]) - Dinv_half.mm(L).mm(Dinv_half)
+        #eigvals, eigvecs = np.linalg.eigh(L_c)
+        #def vis(clusters, eigvecs, num_clusters, ps_clusters):
+        #    feats = torch.cat([clusters, torch.as_tensor(eigvecs).float()], dim=-1)
+        #    seg_idx = fps(feats, ratio=num_clusters/feats.shape[0])
+        #    e0_seg, e1_seg = knn(feats[seg_idx], feats, 1)
+        #    colors = torch.randn(seg_idx.shape[0], 3)
+        #    ps_clusters.add_color_quantity('graph-cut-segmentation', colors[e1_seg])
+        #    ps.show()
+        #import ipdb; ipdb.set_trace()
+        #for i in range(100):
+        #    ps_clusters.add_scalar_quantity(f'eigvec-{i}', eigvecs[:, i])
+        #import ipdb; ipdb.set_trace()
+        #ps.show()
+
+        #cluster_idx = fps(points, ratio=0.005)
+        
+        #e0, e1 = knn(points[cluster_idx], points, 1)
+        #e1_c, e0_c = radius(points[cluster_idx], points[cluster_idx],
+        #                    r=2.0, max_num_neighbors=128)
+        #L = torch.zeros(cluster_idx.shape[0], cluster_idx.shape[0])
+        #L[(e0_c, e1_c)] = 1
+        #L[(e1_c, e0_c)] = 1
+        #L[(e1_c, e1_c)] = 0
+        #L = (L.T + L)/2.0
+        #D = torch.diag(L.sum(-1))
+        #L = D - L
+        #A = L * 0.01 + torch.eye(cluster_idx.shape[0])
+        #Ainv = torch.pinverse(A.cuda()).cpu()
+        #transf = torch.zeros(cluster_idx.shape[0], 6)
+        #colors = torch.randn(cluster_idx.shape[0], 3)
+        #ps_points.add_color_quantity('over-segmentation', colors[point2cluster])
+        #ps.show()
+        transf_list = []
+        var_list = []
+        diff_list = []
+        residual_list = []
+        for i, ref in enumerate(ref_list):
+            print(f'working on component-{i}')
+            ref_points = ref_points_list[i]
+            e0_knn, e1_knn = knn(ref_points, points, 1)
+            transf_this = torch.zeros(num_cluster, 6)
+            var_this = torch.zeros(num_cluster)
+            transform = batched_icp(points, ref_points,
+                                    np.array(ref.normals), point2cluster)
+            r_this = gutil.matrix_to_axis_angle(transform[..., :3, :3])
+            #R_this = gutil.axis_angle_to_matrix(r_this)
+            trans_this = transform[..., :3, 3]
+            transf_this = torch.cat([r_this, trans_this], dim=-1)
+            #transform_p = transform[e1] # [N, 4, 4]
+            #R, trans = gutil.unpack(transform_p)
+            #transformed_points = R.matmul(points.unsqueeze(-1)).squeeze(-1) + trans
+            #ps_transformed = ps.register_point_cloud(f'transformed points-{i}',
+            #                                         transformed_points, radius=2e-4)
+            #ps_transformed.add_color_quantity('over-segmentation', colors[e1])
+            #ps.show()
+
+            #for j, c in enumerate(cluster_idx):
+            #    print(f'{i}-{j}/{len(cluster_idx)}')
+            #    seg_j = o3d.geometry.PointCloud()
+            #    seg_points = points[e0[e1 == j]]
+            #    seg_j.points = o3d.utility.Vector3dVector(seg_points)
+            #    
+            #    T, mean_err = icp_reweighted(seg_j, ref, 0.05, stopping_threshold=1e-2)
+            #    if mean_err > 0.1:
+            #        T, mean_err = icp_reweighted(seg_j, ref, 0.2, stopping_threshold=1e-2)
+            #        if mean_err > 0.1:
+            #            T, mean_err = icp_reweighted(seg_j, ref, 1.0, stopping_threshold=1e-2)
+            #    var_this[j] = mean_err
+            #    T = torch.as_tensor(T).float()
+            #    r = matrix_to_axis_angle(T[:3, :3])
+            #    transf_this[j] = torch.cat([r, T[:3, 3]], dim=0) # velocity
+            
+
+            #
+            #transf_this = Ainv.mm(transf_this)
+            transf = transf_this[point2cluster]
+            var = var_this[point2cluster]
+            var_list.append(var)
+            transf_list.append(transf)
+            R = axis_angle_to_matrix(transf[:, :3])
+            t = transf[:, 3:]
+            new_pos = R.matmul(points.unsqueeze(-1)).squeeze(-1) + t
+            diff = (new_pos - points) / (i+1.0)
+            diff_list.append(diff)
+            ps_points.add_vector_quantity(f'diff-{i}', diff)
+            diff = diff.norm(p=2, dim=-1)
+            residual = (new_pos - ref_points[e1_knn]).norm(p=2, dim=-1)
+            for ths in [0.05, 0.1, 0.15, 0.2]:
+                ps_points.add_scalar_quantity(f'diff-{i} > {ths}', (diff > ths).float())
+            for ths in [0.05, 0.1, 0.15, 0.2]:
+                ps_points.add_scalar_quantity(f'var-{i} > {ths}', (var > ths).float())
+            for ths in [0.05, 0.1, 0.15, 0.2]:
+                ps_points.add_scalar_quantity(f'residual-{i} > {ths}', (residual > ths).float())
+            residual_list.append(residual)
+
+        diff_stack = torch.stack(diff_list, dim=-1)
+        var_stack = torch.stack(var_list, dim=-1)
+        var_stack = (-10*var_stack).exp()
+        diff_mean = (diff_stack * var_stack.unsqueeze(-2)).sum(-1) / var_stack.sum(-1).unsqueeze(-1)
+        diff_var = ((diff_stack - diff_mean.unsqueeze(-1)).square() * var_stack.unsqueeze(-2)).sum(-1) / (var_stack.sum(-1).unsqueeze(-1))
+        diff_var = diff_var.norm(p=2, dim=-1)
+        diff_norm = diff_mean.norm(p=2, dim=-1)
+        for ths in [0.05, 0.1, 0.15, 0.2]:
+            ps_points.add_scalar_quantity(f'diff_var > {ths}', (diff_var > ths).float())
+        ps_points.add_scalar_quantity(f'diff_var', diff_var)
+        ps_points.add_scalar_quantity(f'diff norm', diff_norm)
+        ps_points.add_scalar_quantity(f'diff norm > 0.1 & diff var < 0.05', ((diff_norm > 0.1) & (diff_var < 0.05)).float())
+
+        import ipdb; ipdb.set_trace() 
+                
+        #while True:
+        #    e0_knn, e1_knn = knn(ref_points, points, 1)
+        #    residual = (points - ref_points[e1_knn]).norm(p=2, dim=-1)
+        #    for ths in [0.01, 0.02, 0.05, 0.1]:
+        #        ps_points.add_scalar_quantity(f'residual > {ths}', (residual > ths).float())
+        #    #ps.show()
+        #    #e1, e0 = radius(pv, pv[cluster_idx], r=4.0, max_num_neighbors=1280)
+        #    transf_this = torch.zeros(cluster_idx.shape[0], 6)
+        #    for i, c in enumerate(cluster_idx):
+        #        res_med = residual[e0[e1 == i]].median()
+        #        print(f'{i} / {len(cluster_idx)}, residual.mean()={res_med:.6f}')
+        #        if res_med < 0.05:
+        #            continue
+        #        Ti = icp_reweighted(pcd_i, ref, 0.1, stopping_threshold=1e-2)
+        #        transf_this[i] = torch.cat([ri, Ti[:3, 3]], dim=0)
+        #        #new_pos = points[e0[e1 == i]] @ (Ti[:3, :3].T) + Ti[:3, 3]
+        #        #dist = (new_pos - points[e0[e1 == i]]).norm(p=2, dim=-1)
+        #        #if dist.mean() > 0.1:
+        #        #    ps.register_point_cloud(f'new pos', new_pos, radius=3e-4)
+        #        #    ps.register_point_cloud(f'pos', points[e0[e1 == i]], radius=3e-4)
+        #        #    import ipdb; ipdb.set_trace()
+        #        #    ps.show()
+        #        #e0_knn, e1_knn = knn(ref_points, new_pos, k=1)
+        #        #residual[e0[e1 == i]] = ((new_pos - ref_points[e1_knn]) * normals[e1_knn]).sum(-1).abs().float()
+        #    
+        #    e1_c, e0_c = radius(points[cluster_idx], points[cluster_idx], r=2.0, max_num_neighbors=128)
+        #    L = torch.zeros(cluster_idx.shape[0], cluster_idx.shape[0])
+        #    L[(e0_c, e1_c)] = 1
+        #    L[(e1_c, e0_c)] = 1
+        #    L[(e1_c, e1_c)] = 0
+        #    L = (L.T + L)/2.0
+        #    D = torch.diag(L.sum(-1))
+        #    L = D - L
+        #    A = L * 0.01 + torch.eye(cluster_idx.shape[0])
+        #    transf_this = torch.pinverse(A).mm(transf_this)
+        #    transf = transf_this[e1]
+        #    #transf = knn_interpolate(transf_this, points[cluster_idx], points)
+        #    R = quaternion_to_matrix(axis_angle_to_quaternion(transf[:, :3]))
+        #    t = transf[:, 3:]
+        #    new_pos = R.matmul(points.unsqueeze(-1)).squeeze(-1) + t
+        #    diff = new_pos - points
+        #    diff = diff.norm(p=2, dim=-1)
+        #    residual = (new_pos - ref_points[e1_knn]).norm(p=2, dim=-1)
+        #    #ps_cluster = ps.register_point_cloud('clusters', points[cluster_idx])
+        #    for ths in [0.05, 0.1, 0.15, 0.2]:
+        #        ps_points.add_scalar_quantity(f'diff > {ths}', (diff > ths).float())
+        #    for ths in [0.05, 0.1, 0.15, 0.2]:
+        #        ps_points.add_scalar_quantity(f'residual > {ths}', (residual > ths).float())
+        #    ##diff = (diff / 0.01).clip(0, 1)
+        #    ps.show()
+        #    import ipdb; ipdb.set_trace()
+
+    #def icp(self, moving_points, ref_points):
+    #    p0 = o3d.geometry.PointCloud()
+    #    p0.points = o3d.utility.Vector3dVector(moving_points)
+    #    ref = o3d.geometry.PointCloud()
+    #    ref.points = o3d.utility.Vector3dVector(ref_points)
+    #    ref.estimate_normals(
+    #        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2,
+    #        max_nn=30))
+    #    T = torch.as_tensor(icp_res.transformation).float()
+    #    new_pos = moving_points @ T[:3, :3].T + T[:3, 3]
+    #    #new_pos = (T[:3, :3] @ (moving_points.T)).T + T[:3, 3]
+    #    #e0, e1 = np.array(icp_res.correspondence_set).T
+    #    e0, e1 = knn(ref_points, new_pos, k=1)
+    #    normals = np.array(ref.normals)
+    #    residual = ((new_pos - ref_points[e1]) * normals[e1]).sum(-1).abs().float()
+    #    velocity = (new_pos - ref_points[e1]).norm(p=2, dim=-1).float()
+    #    return T, velocity, residual
+
+    def __call__(self, results):
+        T = results['pose']
+        Tinv = np.linalg.inv(T)
+        pc = self._range_filter(results['points'])
+        ts = [results['timestamp']]
+        sweep_points = [pc]
+        for s in results['sweeps']:
+            points = self._load_points(s['velodyne_path'])
+            points = self._range_filter(points)
+            Ti = Tinv @ s['pose']
+            points.rotate(Ti[:3, :3].T)
+            points.translate(Ti[:3, 3])
+            sweep_points.append(points)
+            ts.append(s['timestamp'])
+         
+        if len(sweep_points) > 4 and (self.counter >= 100):
+            N = len(sweep_points)
+            vel = [[] for i in range(N)]
+            normals = []
+            #ps.remove_all_structures()
+            #for i, si in enumerate(sweep_points):
+            #    ps.register_point_cloud(f's{i}', si.tensor[:, :3], radius=0.0002)
+            #    ref = o3d.geometry.PointCloud()
+            #    ref.points = o3d.utility.Vector3dVector(si.tensor[:, :3])
+            #    ref.estimate_normals(
+            #        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2,
+            #        max_nn=30))
+            #    normals.append(torch.as_tensor(np.array(ref.normals)).float())
+            #ps.show()
+            gt_bbox = results['gt_bboxes_3d']
+            mask = gt_bbox.points_in_boxes(sweep_points[0].tensor[:, :3].cuda()).cpu()
+            seg_mask = torch.zeros_like(mask)
+            segments = {}
+            for i in range(mask.max()-1):
+                segment = segments.get(results['gt_names'][i], [])
+                segment.append(torch.where(mask == i)[0])
+                segments[results['gt_names'][i]] = segment
+            for name in segments.keys():
+                if len(segments[name]) == 1:
+                    segments[name] = segments[name][0]
+                else:
+                    segments[name] = torch.cat(segments[name], dim=0)
+            self.recursive_segment(sweep_points[0].tensor[:, :3], [sweep_points[i].tensor[:, :3] for i in range(1, len(sweep_points))], segments)
+            if act == 'go':
+                velocity = torch.nn.Parameter(torch.zeros(sweep_points[0].shape[0], 3), requires_grad=True)
+                optimizer = torch.optim.SGD([velocity], lr=3e-1)
+                s0 = sweep_points[0].tensor[:, :3]
+                e00, e01 = knn(s0, s0, 30)
+                lamb = 0.02
+                edge = {i: None for i in range(N)}
+                for itr in range(1000):
+                    optimizer.zero_grad()
+                    loss = (velocity[e00] - velocity[e01]).square().mean()*lamb
+                    for i in range(1, N):
+                        si = sweep_points[i].tensor[:, :3]
+                        if edge[i] is None:
+                            _, edge[i] = knn(si, s0+velocity*i, 1)
+                        loss += (si[edge[i]] - (s0+velocity*i)).square().mean()
+                    print(f'itr={itr}, loss={loss.item()}')
+                    loss.backward()
+                    optimizer.step()
+                    if itr % 100 == 0:
+                        ps.get_point_cloud('s0').add_scalar_quantity('velocity', velocity.norm(p=2, dim=-1).float().detach().numpy()*100)
+                        for ths in [1e-5, 1e-4, 1e-3, 3e-3, 1e-2]:
+                            ps.get_point_cloud('s0').add_scalar_quantity(f'velocity > {ths}', (velocity.norm(p=2, dim=-1) > ths).float().detach().numpy())
+                        import ipdb; ipdb.set_trace()
+                        ps.show()
+            #for i in range(N):
+            #    for j in range(N):
+            #        if i == j:
+            #            continue
+            #        si = sweep_points[i].tensor[:, :3]
+            #        sj = sweep_points[j].tensor[:, :3]
+            #        ps_i = ps.get_point_cloud(f's{i}')
+            #        ps_j = ps.get_point_cloud(f's{j}')
+            #        ei, ej = knn(sj, si, 1)
+            #        residual = ((si - sj[ej]) * normals[j][ej]).sum(-1).abs()
+            #        ei0, ei1 = knn(si, si, 30)
+            #        import ipdb; ipdb.set_trace()
+            #        residual = residual[ei1].reshape(-1, 30).median(-1)[0]
+            #        velocity = torch.zeros(si.shape[0]).float()
+            #        clusters = []
+            #        for ths in [0.05, 0.1, 0.1]:
+            #            ps.get_point_cloud(f's{i}').add_scalar_quantity('residual', residual)
+            #            ps.get_point_cloud(f's{i}').add_scalar_quantity(f'residual > {ths}', (residual > ths).float())
+            #            mask = np.where(residual > ths)[0]
+
+            #            si_t = si[mask]
+            #            cluster_idx = fps(si_t, ratio=min(10.0/si_t.shape[0], 1))
+            #            _, e1 = knn(si_t[cluster_idx], si, k=1)
+            #            for k, ck in enumerate(cluster_idx):
+            #                Tk, vel, residual_k = self.icp(si_t[e1 == k], sj)
+            #                residual[mask[e1 == k]] = residual_k
+            #                velocity[mask[e1 == k]] = vel
+            #            ps_i.add_scalar_quantity('residual', residual)
+            #            ps_i.add_scalar_quantity('velocity', velocity)
+            #            for r in [0.05, 0.1, 0.2]:
+            #                ps_i.add_scalar_quantity(f'residual > {r}', (residual > r).float())
+            #                ps_i.add_scalar_quantity(f'velocity > {r}', (velocity > r).float())
+            #                ps_i.add_scalar_quantity(f'velocity > {r} & residual < {r}', ((velocity > r) & (residual < r)).float())
+            #            ps.show()
+                    
+                    #ei, ej = knn(sj, si, k=1)
+                    #dist = (si - sj[ej]).norm(p=2, dim=-1) / (j - i)
+                    #vel[i].append(dist)
+            #for i in range(N):
+            #    if len(vel[i]) > 1:
+            #        vel[i] = torch.stack(vel[i], dim=-1).median(dim=-1)[0]
+            #ps.remove_all_structures()
+            #for i, si in enumerate(sweep_points):
+            #    ps_i = ps.register_point_cloud(f's{i}', si.tensor[:, :3], radius=0.0002)
+            #    ps_i.add_scalar_quantity('velocity', vel[i], enabled=True)
+            #    ps_i.add_scalar_quantity('velocity > 0.1', (vel[i] > 0.1**2).float(), enabled=True)
+            #ps.show()
+        self.counter += 1
+            
+        return results
 
 @PIPELINES.register_module()
 class RandomFlip3D(RandomFlip):

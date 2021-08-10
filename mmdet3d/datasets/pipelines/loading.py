@@ -88,7 +88,6 @@ class LoadImageFromFileMono3D(LoadImageFromFile):
         results['cam_intrinsic'] = results['img_info']['cam_intrinsic']
         return results
 
-
 @PIPELINES.register_module()
 class LoadPointsFromMultiSweeps(object):
     """Load points from multiple sweeps.

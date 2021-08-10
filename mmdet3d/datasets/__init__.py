@@ -31,6 +31,7 @@ __all__ = [
     'NormalizePointsColor', 'IndoorPatchPointSample', 'IndoorPointSample',
     'LoadAnnotations3D', 'GlobalAlignment', 'SUNRGBDDataset', 'ScanNetDataset',
     'ScanNetSegDataset', 'SemanticKITTIDataset', 'Custom3DDataset',
-    'Custom3DSegDataset', 'LoadPointsFromMultiSweeps', 'WaymoDataset', 'WaymoGTDataset',
+    'Custom3DSegDataset', 'LoadPointsFromMultiSweeps', 'WaymoDataset',
+    'WaymoGTDataset',
     'BackgroundPointsFilter', 'VoxelBasedPointSampler', 'get_loading_pipeline'
 ]
