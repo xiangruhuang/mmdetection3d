@@ -119,14 +119,26 @@ class WaymoDataset(KittiDataset):
         Trv2c = info['calib']['Tr_velo_to_cam'].astype(np.float32)
         P0 = info['calib']['P0'].astype(np.float32)
         lidar2img = P0 @ rect @ Trv2c
-
+        
         pts_filename = self._get_pts_filename(sample_idx)
+        sweeps = []
+        if len(info['sweeps']) > 0:
+            sweeps = []
+            for s in info['sweeps']:
+                if s['timestamp'] == info['timestamp']:
+                    s['velodyne_path'] = os.path.join(
+                        self.data_root, s['velodyne_path']
+                        )
+                    sweeps.append(s)
         input_dict = dict(
             sample_idx=sample_idx,
             pts_filename=pts_filename,
             img_prefix=None,
             img_info=dict(filename=img_filename),
-            lidar2img=lidar2img)
+            lidar2img=lidar2img,
+            sweeps=sweeps,
+            timestamp=info['timestamp'],
+            pose=info['pose'])
 
         if not self.test_mode:
             annos = self.get_ann_info(index)

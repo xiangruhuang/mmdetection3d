@@ -1,6 +1,7 @@
 import numpy as np
 from mmcv import is_tuple_of
 from mmcv.utils import build_from_cfg
+import torch
 
 from mmdet3d.core import VoxelGenerator
 from mmdet3d.core.bbox import box_np_ops
@@ -9,8 +10,259 @@ from mmdet.datasets.pipelines import RandomFlip
 from ..builder import OBJECTSAMPLERS
 from .data_augment_utils import noise_per_object_v3_
 from mmdet3d.ops import Points_Sampler
-from torch_geometric.nn import fps
+from torch_geometric.nn import knn, fps, radius, knn_interpolate
 from mmdet3d.ops import points_in_boxes_cpu
+import polyscope as ps 
+import open3d as o3d
+import os
+#from pytorch3d.transforms.rotation_conversions import \
+#    matrix_to_quaternion, quaternion_to_matrix, \
+#    quaternion_to_axis_angle, axis_angle_to_quaternion
+from geop import icp_reweighted, batched_icp
+from geop import matrix_to_axis_angle, axis_angle_to_matrix
+import geop.geometry.util as gutil
+from torch_scatter import scatter
+
+@PIPELINES.register_module()
+class EstimateMotionMask(object):
+    def __init__(self,
+                 sweeps_num=10,
+                 points_loader=None,
+                 points_range_filter=None):
+        if points_loader is not None:
+            self.points_loader = build_from_cfg(points_loader, PIPELINES)
+        if points_range_filter is not None:
+            self.points_range_filter = build_from_cfg(points_range_filter, PIPELINES)
+        self.counter = 0
+        self.stats = [0, 0]
+
+    def _load_points(self, pts_filename):
+        inp = dict(pts_filename=pts_filename)
+        return self.points_loader(inp)['points']
+
+    def _range_filter(self, points):
+        inp = dict(points=points)
+        return self.points_range_filter(inp)['points']
+
+    def graph_cut_overseg(self, points, l, r, num_clusters):
+        from torch_geometric.data import Data
+        from torch_geometric.transforms import GridSampling
+        clusters = GridSampling(0.2)(Data(pos=points)).pos
+        ps_clusters = ps.register_point_cloud('clusters', clusters,
+                                              radius=4e-4, enabled=False)
+        e0_r, e1_r = radius(clusters, clusters, 0.5, max_num_neighbors=1280)
+        from scipy.sparse import csr_matrix
+        import scipy
+        G = csr_matrix((np.ones_like(e0_r.numpy()), (e0_r.numpy(), e1_r.numpy())),
+                        shape=(clusters.shape[0], clusters.shape[0]))
+        num_comp, comp_labels = scipy.sparse.csgraph.connected_components(G, directed=False)
+        e0, e1 = knn(clusters, points, 1)
+        return comp_labels[e1]
+
+    def weighted_scalar_aggr(self, x, w, index):
+        """
+        Args:
+            y (torch.Tensor, shape=[M, D])
+            x (torch.Tensor, shape=[N]): src
+            w (torch.Tensor, shape=[N]): weights
+            index (torch.Tensor, shape=[N]): target index
+
+        Returns:
+            y (torch.Tensor, shape=[M])
+        """
+        num_cluster = index.max()+1
+        top = scatter(x*w, index, dim=-1, dim_size=num_cluster, reduce='sum')
+        bottom = scatter(w, index, dim=-1, dim_size=num_cluster, reduce='sum')
+        return top / bottom
+
+    def weighted_vector_aggr(self, x, w, index):
+        """
+        Args:
+            x (torch.Tensor, shape=[N, D]): src
+            w (torch.Tensor, shape=[N]): weights
+            index (torch.Tensor, shape=[N]): target index
+
+        Returns:
+            y (torch.Tensor, shape=[M, D])
+        """
+        num_cluster = index.max()+1
+        top = scatter(x*w.unsqueeze(-1), index, dim=0,
+                      dim_size=num_cluster, reduce='sum')
+        bottom = scatter(w, index, dim=-1, dim_size=num_cluster,
+                         reduce='sum')
+        return top / bottom.unsqueeze(-1)
+
+    def estimate_per_cluster(self, points, ref_points,
+                             point2cluster, transform):
+        point2cluster = torch.as_tensor(point2cluster, dtype=torch.long)
+        R, t = gutil.unpack(transform)
+        R, t = R[point2cluster], t[point2cluster]
+        new_pos = R.matmul(points.unsqueeze(-1)).squeeze(-1) + t
+
+        e0_new, e1_new = knn(ref_points, new_pos, 1)
+        residual = (new_pos - ref_points[e1_new]).norm(p=2, dim=-1)
+        weight = (-(residual / 0.05)**2).exp()
+        motion = (new_pos - points) # [N, 3]
+
+        motion = self.weighted_vector_aggr(motion, weight, point2cluster)
+        residual = self.weighted_scalar_aggr(residual, torch.ones_like(weight),
+                                             point2cluster)
+
+        return motion, residual
+
+    def recursive_segment(self, points, ref_points_list, segments):
+        ref_list, normals_list = [], []
+        ps.set_up_dir('z_up')
+        ps.init()
+        ps.remove_all_structures()
+        for i, ref_points in enumerate(ref_points_list):
+            ps_ref = ps.register_point_cloud(f'ref-{i}', ref_points,
+                                             radius=2e-4, enabled=False)
+            ref = o3d.geometry.PointCloud()
+            ref.points = o3d.utility.Vector3dVector(ref_points)
+            ref.estimate_normals(
+                search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2,
+                max_nn=30))
+            normals_list.append(np.array(ref.normals))
+            ref_list.append(ref)
+        ps_points = ps.register_point_cloud('points', points, radius=2e-4)
+        for key in segments.keys():
+            ps.register_point_cloud(f'seg-{key}', points[segments[key]],
+                                    radius=4e-4, enabled=False)
+        point2cluster = self.graph_cut_overseg(points, 0, 300, 300)
+        num_cluster = point2cluster.max()+1
+        num_points_per_cluster = scatter(
+            torch.ones_like(points[:, 0]), point2cluster, dim=0,
+            dim_size=num_cluster, reduce='sum')
+        if True:
+            comp_colors = torch.randn(1000, 3).cuda()
+            comp_idx = fps(comp_colors, ratio=num_cluster+1 / 1000.0)
+            comp_colors = comp_colors[comp_idx].detach().cpu()
+            ps_points.add_color_quantity('connected components',
+                                         comp_colors[point2cluster])
+        motion_list = []
+        residual_list = []
+        for i, ref in enumerate(ref_list):
+            print(f'working on component-{i}')
+            ref_points = ref_points_list[i]
+            e0_knn, e1_knn = knn(ref_points, points, 1)
+            transf_this = torch.zeros(num_cluster, 6)
+            transform = batched_icp(
+                points, ref_points, np.array(ref.normals), point2cluster)
+            motion, residual = self.estimate_per_cluster(
+                points, ref_points, point2cluster, transform)
+            motion = motion / (i+1.0)
+            velocity = motion.norm(p=2, dim=-1)
+            motion_p = motion[point2cluster]
+            residual_p = residual[point2cluster]
+            velocity_p = velocity[point2cluster]
+            ps_points.add_vector_quantity(f'motion-per-cluster-{i}', motion_p)
+            ps_points.add_scalar_quantity(f'residual-per-cluster-{i}', residual_p)
+            ps_points.add_scalar_quantity(f'velocity-per-cluster-{i}', velocity_p)
+            #for ths in [0.05, 0.1, 0.15, 0.2]:
+            #    ps_points.add_scalar_quantity(f'velocity-per-cluster-{i} > {ths}', (velocity_p > ths).float())
+            #for ths in [0.05, 0.1, 0.15, 0.2]:
+            #    ps_points.add_scalar_quantity(f'residual-per-cluster-{i} > {ths}', (residual_p > ths).float())
+            motion_list.append(motion)
+            residual_list.append(residual)
+        
+        motion_stack = torch.stack(motion_list, dim=-1)
+        residual_stack = torch.stack(residual_list, dim=-1)
+        weight_stack = (-(residual_stack/0.05)**2).exp()
+        for i in range(weight_stack.shape[-1]):
+            ps_points.add_scalar_quantity(f'weight of ref-frame-{i}',
+                                          weight_stack[point2cluster, i])
+        
+        weight_stack, selected_frames = weight_stack.sort(descending=True, dim=-1)
+        weight_stack = weight_stack[:, :3]
+        selected_frames = selected_frames[:, :3]
+        slices = []
+        for k in range(3):
+            slices.append(
+                motion_stack.transpose(1, 2)[(torch.arange(motion_stack.shape[0]), selected_frames[:, k])]
+                )
+        motion_stack = torch.stack(slices, dim=-1)
+        
+        mean_motion = (motion_stack * weight_stack.unsqueeze(-2)).sum(-1) / weight_stack.sum(-1).unsqueeze(-1)
+        motion_std = ((motion_stack - mean_motion.unsqueeze(-1)).square()).sum(-1)
+        motion_std = motion_std.norm(p=2, dim=-1)
+        mean_velocity = mean_motion.norm(p=2, dim=-1)
+        mean_motion_p = mean_motion[point2cluster]
+        motion_std_p = motion_std[point2cluster]
+        mean_velocity_p = mean_velocity[point2cluster]
+        #for ths in [0.05, 0.1, 0.15, 0.2]:
+        #    ps_points.add_scalar_quantity(f'std(motion) per cluster > {ths}',
+        #                                  (motion_std_p > ths).float())
+        ps_points.add_scalar_quantity(f'std(motion) per cluster', motion_std_p)
+        ps_points.add_vector_quantity(f'mean motion per cluster', mean_motion_p)
+        ps_points.add_scalar_quantity(f'velocity per cluster', mean_velocity_p)
+        
+        motion_mask = (mean_velocity > 0.15) & (motion_std < 0.05) & (num_points_per_cluster > 10)
+        ps_points.add_scalar_quantity(f'moving objects', motion_mask[point2cluster])
+        motion_mask_p = motion_mask[point2cluster]
+
+        obj_mask = (motion_std[point2cluster] < -1)
+        for key in segments.keys():
+            obj_mask[segments[key]] = True
+        top = (motion_mask_p & obj_mask).float().sum()
+        bottom = motion_mask_p.float().sum()
+        self.stats[0] += top.item()
+        self.stats[1] += bottom.item()
+        ps.show()
+        print(f'FP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}')
+        return mean_velocity[point2cluster], motion_std[point2cluster], point2cluster, obj_mask
+
+    def __call__(self, results):
+        T = results['pose']
+        Tinv = np.linalg.inv(T)
+        pc = self._range_filter(results['points'])
+        ts = [results['timestamp']]
+        sweep_points = [pc]
+        for s in results['sweeps']:
+            points = self._load_points(s['velodyne_path'])
+            points = self._range_filter(points)
+            Ti = Tinv @ s['pose']
+            points.rotate(Ti[:3, :3].T)
+            points.translate(Ti[:3, 3])
+            sweep_points.append(points)
+            ts.append(s['timestamp'])
+         
+        if len(sweep_points) > 4:
+            N = len(sweep_points)
+            vel = [[] for i in range(N)]
+            normals = []
+            gt_bbox = results['gt_bboxes_3d']
+            mask = gt_bbox.points_in_boxes(sweep_points[0].tensor[:, :3].cuda()).cpu()
+            seg_mask = torch.zeros_like(mask)
+            segments = {}
+            for i in range(mask.max()-1):
+                segment = segments.get(results['gt_names'][i], [])
+                segment.append(torch.where(mask == i)[0])
+                segments[results['gt_names'][i]] = segment
+            for name in segments.keys():
+                if len(segments[name]) == 1:
+                    segments[name] = segments[name][0]
+                else:
+                    segments[name] = torch.cat(segments[name], dim=0)
+            filename = results['pts_filename']
+            filename_p = filename.replace('velodyne', 'motion_mask').replace('.bin', '.pth')
+            if not os.path.exists(filename_p):
+                velocity, std, point2cluster, moving = \
+                    self.recursive_segment(
+                        sweep_points[0].tensor[:, :3], 
+                        [sweep_points[i].tensor[:, :3] 
+                            for i in range(1, len(sweep_points))], 
+                        segments)
+                motion_dict = {'velocity': velocity, 'std': std,
+                               'moving': moving, 'point2cluster': point2cluster}
+                motion_dict['points'] = sweep_points[0].tensor[:, :3]
+                for i in range(1, len(sweep_points)):
+                    motion_dict[f'ref-{i-1}'] = sweep_points[i].tensor[:, :3]
+                print(f'saving to {filename_p}')
+                torch.save(motion_dict, filename_p)
+        self.counter += 1
+            
+        return results
 
 @PIPELINES.register_module()
 class RandomFlip3D(RandomFlip):
