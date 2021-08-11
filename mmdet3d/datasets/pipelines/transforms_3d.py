@@ -208,7 +208,7 @@ class EstimateMotionMask(object):
         bottom = motion_mask_p.float().sum()
         self.stats[0] += top.item()
         self.stats[1] += bottom.item()
-        ps.show()
+        #ps.show()
         print(f'FP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}')
         return mean_velocity[point2cluster], motion_std[point2cluster], point2cluster, obj_mask
 
