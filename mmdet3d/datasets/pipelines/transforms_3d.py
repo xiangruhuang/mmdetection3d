@@ -132,7 +132,8 @@ class EstimateMotionMask(object):
         point2cluster = self.graph_cut_overseg(points, 0, 300, 300)
         num_cluster = point2cluster.max()+1
         num_points_per_cluster = scatter(
-            torch.ones_like(points[:, 0]), point2cluster, dim=0,
+            torch.ones_like(points[:, 0]),
+            torch.as_tensor(point2cluster, dtype=torch.long), dim=0,
             dim_size=num_cluster, reduce='sum')
         if True:
             comp_colors = torch.randn(1000, 3).cuda()
@@ -208,9 +209,17 @@ class EstimateMotionMask(object):
         bottom = motion_mask_p.float().sum()
         self.stats[0] += top.item()
         self.stats[1] += bottom.item()
-        ps.show()
-        print(f'FP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}')
-        return mean_velocity[point2cluster], motion_std[point2cluster], point2cluster, obj_mask
+        #ps.show()
+        if self.stats[1] > 0:
+            print(f'TP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}, TP={self.stats[0]}, FP={self.stats[1]-self.stats[0]}')
+        out_dict = {}
+        out_dict['velocity'] = mean_velocity
+        out_dict['motion'] = mean_motion
+        out_dict['std'] = motion_std
+        out_dict['point2cluster'] = point2cluster
+        out_dict['moving'] = obj_mask
+
+        return out_dict
 
     def __call__(self, results):
         T = results['pose']
@@ -247,14 +256,12 @@ class EstimateMotionMask(object):
             filename = results['pts_filename']
             filename_p = filename.replace('velodyne', 'motion_mask').replace('.bin', '.pth')
             if not os.path.exists(filename_p):
-                velocity, std, point2cluster, moving = \
+                motion_dict = \
                     self.recursive_segment(
                         sweep_points[0].tensor[:, :3], 
                         [sweep_points[i].tensor[:, :3] 
                             for i in range(1, len(sweep_points))], 
                         segments)
-                motion_dict = {'velocity': velocity, 'std': std,
-                               'moving': moving, 'point2cluster': point2cluster}
                 motion_dict['points'] = sweep_points[0].tensor[:, :3]
                 for i in range(1, len(sweep_points)):
                     motion_dict[f'ref-{i-1}'] = sweep_points[i].tensor[:, :3]
