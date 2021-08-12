@@ -90,6 +90,7 @@ def batched_icp(source_points, target_points, target_normals,
         for itr in range(max_iter):
             active_mask_p = active_mask[point2cluster] # [N]
             p_active = p[active_mask_p]
+            import ipdb; ipdb.set_trace()
             e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
             nor = target_normals[e1] # [N, 3]
             q = target_points[e1] # [N, 3]
