@@ -70,18 +70,39 @@ def icp_reweighted(source, target, sigma=0.01, max_iter = 100,
     return transform, mean_err
 
 def batched_icp(source_points, target_points, target_normals,
-                point2cluster, 
+                point2cluster, init_transf=None,
                 sigma=0.05, max_iter=40,
                 stopping_threshold=1e-2):
-    source_points = torch.as_tensor(source_points).float().cuda()
-    target_points = torch.as_tensor(target_points).float().cuda()
-    target_normals = torch.as_tensor(target_normals).float().cuda()
+    """
+    Args:
+        source_points (torch.Tensor, shape=[N1, 3]): moving frame
+        target_points (torch.Tensor, shape=[N2, 3]): reference frame
+        target_normals (torch.Tensor, shape=[N2, 3]): normal
+        point2cluster (torch.Tensor, shape=[N1]): cluster assignments ([M])
+
+    Returns:
+        transform (torch.Tensor, shape=[M, 4, 4]): per cluster rigid
+            transformation
+
+    """
+
+    source_points_cpu = torch.as_tensor(source_points).float()
+    source_points = source_points_cpu.cuda()
+    target_points_cpu = torch.as_tensor(target_points).float()
+    target_points = target_points_cpu.cuda()
+    target_normals_cpu = torch.as_tensor(target_normals).float()
+    target_normals = target_normals_cpu.cuda()
     point2cluster = torch.as_tensor(point2cluster).long().cuda()
     num_clusters = point2cluster.max()+1
-    transform = torch.eye(4).repeat(num_clusters, 1, 1).float().cuda() # [M, 4, 4]
+    if init_transf is None:
+        transform = torch.eye(4).repeat(num_clusters, 1, 1).float().cuda() # [M, 4, 4]
+    else:
+        transform = torch.as_tensor(init_transf).float().cuda()
+
     lamb = 0.1
-    active_mask = torch.as_tensor([True], dtype=torch.bool).repeat(num_clusters) # [M]
-    target_points_cpu = target_points.detach().cpu()
+    active_mask = torch.as_tensor([True], dtype=torch.bool
+                      ).repeat(num_clusters) # [M]
+
     for sigma in [0.05, 0.2, 1.0]:
         p = source_points.clone()
         R, trans = gutil.unpack(transform) # [M, 3, 3], [M, 3]
@@ -90,7 +111,13 @@ def batched_icp(source_points, target_points, target_normals,
         for itr in range(max_iter):
             active_mask_p = active_mask[point2cluster] # [N]
             p_active = p[active_mask_p]
-            e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
+            p_active_cpu = p_active.detach().cpu()
+            
+            t0=time.time()
+            e0, e1 = knn(target_points_cpu, p_active_cpu, 1, num_workers=4)
+            print('knntime=', time.time()-t0)
+            import ipdb; ipdb.set_trace()
+            e0, e1 = e0.cuda(), e1.cuda()
             nor = target_normals[e1] # [N, 3]
             q = target_points[e1] # [N, 3]
             d = ((p_active - q) * nor).sum(-1) # [N]
