@@ -22,6 +22,7 @@ from geop import icp_reweighted, batched_icp
 from geop import matrix_to_axis_angle, axis_angle_to_matrix
 import geop.geometry.util as gutil
 from torch_scatter import scatter
+import time
 
 @PIPELINES.register_module()
 class EstimateMotionMask(object):
@@ -35,6 +36,7 @@ class EstimateMotionMask(object):
             self.points_range_filter = build_from_cfg(points_range_filter, PIPELINES)
         self.counter = 0
         self.stats = [0, 0]
+        self.sweeps_num = sweeps_num
 
     def _load_points(self, pts_filename):
         inp = dict(pts_filename=pts_filename)
@@ -111,6 +113,8 @@ class EstimateMotionMask(object):
         return motion, residual
 
     def recursive_segment(self, points, ref_points_list, segments):
+        import time
+        t0 = time.time()
         ref_list, normals_list = [], []
         #ps.set_up_dir('z_up')
         #ps.init()
@@ -125,6 +129,7 @@ class EstimateMotionMask(object):
                 max_nn=30))
             normals_list.append(np.array(ref.normals))
             ref_list.append(ref)
+        print(f'est normal={time.time()-t0}'); t0 = time.time()
         #ps_points = ps.register_point_cloud('points', points, radius=2e-4)
         #for key in segments.keys():
         #    ps.register_point_cloud(f'seg-{key}', points[segments[key]],
@@ -135,25 +140,30 @@ class EstimateMotionMask(object):
             torch.ones_like(points[:, 0]),
             torch.as_tensor(point2cluster, dtype=torch.long), dim=0,
             dim_size=num_cluster, reduce='sum')
-        if True:
-            comp_colors = torch.randn(1000, 3).cuda()
-            comp_idx = fps(comp_colors, ratio=num_cluster+1 / 1000.0)
-            comp_colors = comp_colors[comp_idx].detach().cpu()
+        print(f'graph cut={time.time()-t0}'); t0 = time.time()
+        #if True:
+        #    comp_colors = torch.randn(1000, 3)
+        #    comp_idx = fps(comp_colors, ratio=num_cluster+1 / 1000.0)
+        #    comp_colors = comp_colors[comp_idx]
             #ps_points.add_color_quantity('connected components',
             #                             comp_colors[point2cluster])
+
         motion_list = []
         residual_list = []
+        transform = torch.eye(4).repeat(num_cluster, 1, 1).to(points)
         for i, ref in enumerate(ref_list):
             print(f'working on component-{i}')
+            t0 = time.time()
             ref_points = ref_points_list[i]
             e0_knn, e1_knn = knn(ref_points, points, 1)
             transf_this = torch.zeros(num_cluster, 6)
             transform = batched_icp(
-                points, ref_points, np.array(ref.normals), point2cluster)
+                points, ref_points, np.array(ref.normals), point2cluster,
+                transform)
             motion, residual = self.estimate_per_cluster(
                 points, ref_points, point2cluster, transform)
             motion = motion / (i+1.0)
-            velocity = motion.norm(p=2, dim=-1)
+            #velocity = motion.norm(p=2, dim=-1)
             #motion_p = motion[point2cluster]
             #residual_p = residual[point2cluster]
             #velocity_p = velocity[point2cluster]
@@ -162,6 +172,7 @@ class EstimateMotionMask(object):
             #ps_points.add_scalar_quantity(f'velocity-per-cluster-{i}', velocity_p)
             motion_list.append(motion)
             residual_list.append(residual)
+            print('icp=', time.time()-t0)
         
         motion_stack = torch.stack(motion_list, dim=-1) # [M, 3, F]
         residual_stack = torch.stack(residual_list, dim=-1) # [M, F]
@@ -191,7 +202,7 @@ class EstimateMotionMask(object):
         #ps_points.add_vector_quantity(f'mean motion per cluster', mean_motion_p)
         #ps_points.add_scalar_quantity(f'velocity per cluster', mean_velocity_p)
         
-        motion_mask = (mean_velocity > 0.15) & (motion_std < 0.05) & (num_points_per_cluster > 10)
+        motion_mask = (mean_velocity > 0.15) & (motion_std/mean_velocity < 0.1) & (num_points_per_cluster > 30)
         #ps_points.add_scalar_quantity(f'moving objects', motion_mask[point2cluster])
         motion_mask_p = motion_mask[point2cluster]
 
@@ -219,6 +230,8 @@ class EstimateMotionMask(object):
         pc = self._range_filter(results['points'])
         ts = [results['timestamp']]
         sweep_points = [pc]
+        if len(results['sweeps']) > self.sweeps_num:
+            results['sweeps'] = results['sweeps'][:self.sweeps_num]
         for s in results['sweeps']:
             points = self._load_points(s['velodyne_path'])
             points = self._range_filter(points)

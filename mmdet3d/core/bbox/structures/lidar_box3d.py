@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from mmdet3d.core.points import BasePoints
-from mmdet3d.ops.roiaware_pool3d import points_in_boxes_gpu
+from mmdet3d.ops.roiaware_pool3d import points_in_boxes_gpu, points_in_boxes_cpu
 from .base_box3d import BaseInstance3DBoxes
 from .utils import limit_period, rotation_3d_in_axis
 
@@ -263,7 +263,12 @@ class LiDARInstance3DBoxes(BaseInstance3DBoxes):
         Returns:
             torch.Tensor: The index of box where each point are in.
         """
-        box_idx = points_in_boxes_gpu(
+        if points.is_cuda:
+            box_idx = points_in_boxes_gpu(
             points.unsqueeze(0),
             self.tensor.unsqueeze(0).to(points.device)).squeeze(0)
+        else:
+            box_idx = points_in_boxes_cpu(
+                points, self.tensor.to(points.device))
+
         return box_idx

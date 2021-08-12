@@ -70,15 +70,20 @@ def icp_reweighted(source, target, sigma=0.01, max_iter = 100,
     return transform, mean_err
 
 def batched_icp(source_points, target_points, target_normals,
-                point2cluster, 
+                point2cluster, init_transf=None,
                 sigma=0.05, max_iter=40,
-                stopping_threshold=1e-2):
-    source_points = torch.as_tensor(source_points).float().cuda()
-    target_points = torch.as_tensor(target_points).float().cuda()
-    target_normals = torch.as_tensor(target_normals).float().cuda()
-    point2cluster = torch.as_tensor(point2cluster).long().cuda()
+                stopping_threshold=1e-2, device='cuda'):
+    source_points = torch.as_tensor(source_points).float().to(device)
+    target_points = torch.as_tensor(target_points).float().to(device)
+    target_normals = torch.as_tensor(target_normals).float().to(device)
+    point2cluster = torch.as_tensor(point2cluster).long().to(device)
     num_clusters = point2cluster.max()+1
-    transform = torch.eye(4).repeat(num_clusters, 1, 1).float().cuda() # [M, 4, 4]
+    if init_transf is None:
+        init_transf = torch.eye(4).repeat(num_clusters, 1, 1).float().to(device) # [M, 4, 4]
+    else:
+        init_transf = init_transf.float().to(device)
+    
+    transform = init_transf.clone()
     lamb = 0.1
     active_mask = torch.as_tensor([True], dtype=torch.bool).repeat(num_clusters) # [M]
     target_points_cpu = target_points.detach().cpu()
@@ -90,8 +95,8 @@ def batched_icp(source_points, target_points, target_normals,
         for itr in range(max_iter):
             active_mask_p = active_mask[point2cluster] # [N]
             p_active = p[active_mask_p]
-            import ipdb; ipdb.set_trace()
-            e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
+            if itr % 5 == 0:
+                e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
             nor = target_normals[e1] # [N, 3]
             q = target_points[e1] # [N, 3]
             d = ((p_active - q) * nor).sum(-1) # [N]
@@ -128,7 +133,7 @@ def batched_icp(source_points, target_points, target_normals,
             if delta.norm(p=2, dim=-1).max() <= stopping_threshold:
                 break
             
-        e0, e1 = knn(target_points_cpu, p.detach().cpu(), 1).cuda()
+        e0, e1 = knn(target_points, p, 1).cuda()
         nor = target_normals[e1] # [N, 3]
         q = target_points[e1] # [N, 3]
         d = ((p - q) * nor).sum(-1) # [N]
@@ -136,9 +141,9 @@ def batched_icp(source_points, target_points, target_normals,
         active_mask[errors > 0.1] = True
         active_mask[errors <= 0.1] = False
         if sigma < 0.8:
-            transform[active_mask, :, :] = torch.eye(4).to(transform)
+            transform[active_mask, :, :] = init_transf[active_mask]
 
-    return transform.detach().cpu()
+    return transform
 
 if __name__ == '__main__':
     import argparse
