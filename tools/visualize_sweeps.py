@@ -106,7 +106,7 @@ def main():
     #        dist=True,
     #        seed=816)
 
-    for i in range(10000, len(dataset)):
+    for i in range(0, len(dataset), 42):
         if i % 6 == args.para_split:
             data = dataset[i]
             print(i, len(dataset))

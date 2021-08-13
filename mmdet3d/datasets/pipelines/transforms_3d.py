@@ -33,7 +33,7 @@ class EstimateMotionMask(object):
                  points_loader=None,
                  points_range_filter=None,
                  visualize=False,
-                 eval_stats=False):
+                 eval_stats=True):
         if points_loader is not None:
             self.points_loader = build_from_cfg(points_loader, PIPELINES)
         if points_range_filter is not None:
@@ -114,73 +114,105 @@ class EstimateMotionMask(object):
         residual = self.weighted_scalar_aggr(residual, torch.ones_like(weight),
                                              point2cluster)
 
-        return motion, residual
+        return motion, residual, new_pos
 
     def recursive_segment(self, points, ref_points_list, segments):
         t0 = time.time()
+        e0, e1 = radius(points, points, r=0.4, max_num_neighbors=64)
+        diff = (points[e0] - points[e1])
+        ppT = (diff.unsqueeze(-1) * diff.unsqueeze(-2)).view(-1, 9)
+        ppT_per_point = scatter(
+            ppT, e0, dim=0,
+            dim_size=points.shape[0], reduce='sum').view(-1, 3, 3)
+        eigvals = np.linalg.eigvalsh(ppT_per_point.numpy())
+        valid_idx = np.where(eigvals[:, 1] > 0.03)[0]
+        valid_idx = torch.as_tensor(valid_idx, dtype=torch.long)
         ref_list, normals_list = [], []
         if self.visualize:
             ps.set_up_dir('z_up')
             ps.init()
             ps.remove_all_structures()
-            ps_points = ps.register_point_cloud('points', points, radius=2e-4)
+            ps_points = ps.register_point_cloud('points', points[valid_idx], radius=2e-4)
+            #for i in range(3):
+            #    ps_points.add_scalar_quantity(f'eig-{i}', eigvals[:, i])
+            #for ths in np.logspace(-6, 0, 20):
+            #    ps_points.add_scalar_quantity(f'eig-1 < {ths}', eigvals[:, 1] < ths)
+
             for key in segments.keys():
                 ps.register_point_cloud(f'seg-{key}', points[segments[key]],
                                         radius=4e-4, enabled=False)
+        if self.eval_stats:
+            obj_mask = (points[:, 0] < -1e10)
+            obj_mask[:] = False
+            for key in segments.keys():
+                obj_mask[segments[key]] = True
+            obj_mask = obj_mask[valid_idx]
 
+        points = points[valid_idx]
         for i, ref_points in enumerate(ref_points_list):
-            if self.visualize:
-                ps_ref = ps.register_point_cloud(f'ref-{i}', ref_points,
-                                                 radius=2e-4, enabled=False)
             ref = o3d.geometry.PointCloud()
             ref.points = o3d.utility.Vector3dVector(ref_points)
             ref.estimate_normals(
-                search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2,
-                max_nn=30))
+                search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.4,
+                max_nn=20))
+            if self.visualize:
+                ps_ref = ps.register_point_cloud(f'ref-{i}', ref_points,
+                                                 radius=2e-4, enabled=False)
+                ps_ref.add_vector_quantity('normals', np.array(ref.normals))
             normals_list.append(np.array(ref.normals))
             ref_list.append(ref)
 
-        print(f'est normal={time.time()-t0}'); t0 = time.time()
+        #print(f'est normal={time.time()-t0}'); t0 = time.time()
         point2cluster = self.graph_cut_overseg(points, 0, 300, 300)
         num_cluster = point2cluster.max()+1
         num_points_per_cluster = scatter(
             torch.ones_like(points[:, 0]),
             torch.as_tensor(point2cluster, dtype=torch.long), dim=0,
             dim_size=num_cluster, reduce='sum')
+        max_z = scatter(
+            points[:, 2],
+            torch.as_tensor(point2cluster, dtype=torch.long), dim=0,
+            dim_size=num_cluster, reduce='max')
+        min_z = -scatter(
+            -points[:, 2],
+            torch.as_tensor(point2cluster, dtype=torch.long), dim=0,
+            dim_size=num_cluster, reduce='max')
 
         if self.visualize:
-            comp_colors = torch.randn(1000, 3).cuda()
-            comp_idx = fps(comp_colors, ratio=num_cluster+1 / 1000.0)
+            comp_colors = torch.randn(max(1000, num_cluster), 3).cuda()
+            comp_idx = fps(comp_colors, ratio=(num_cluster+1) / 1000.0)
             comp_colors = comp_colors[comp_idx].detach().cpu()
             ps_points.add_color_quantity('connected components',
                                          comp_colors[point2cluster])
 
-        print(f'graph cut={time.time()-t0}'); t0 = time.time()
+        #print(f'graph cut={time.time()-t0}'); t0 = time.time()
 
         motion_list = []
         residual_list = []
         transform = torch.eye(4).repeat(num_cluster, 1, 1).to(points)
         for i, ref in enumerate(ref_list):
-            print(f'working on component-{i}')
+            #print(f'working on component-{i}')
             ref_points = ref_points_list[i]
             e0_knn, e1_knn = knn(ref_points, points, 1)
             transf_this = torch.zeros(num_cluster, 6)
             transform = batched_icp(
                 points, ref_points, np.array(ref.normals), point2cluster,
                 init_transf = transform)
-            motion, residual = self.estimate_per_cluster(
+            motion, residual, moved_points = self.estimate_per_cluster(
                 points, ref_points, point2cluster, transform)
+            ps.register_point_cloud(f'moved-points-{i}', moved_points, radius=2e-4, enabled=False)
+            #print(f'icp={time.time()-t0}'); t0 = time.time()
             motion = motion / (i+1.0)
             motion_list.append(motion)
             residual_list.append(residual)
             if self.visualize:
                 motion_p = motion[point2cluster]
                 residual_p = residual[point2cluster]
+                velocity = motion.norm(p=2, dim=-1)
                 velocity_p = velocity[point2cluster]
                 ps_points.add_vector_quantity(f'motion-per-cluster-{i}', motion_p)
                 ps_points.add_scalar_quantity(f'residual-per-cluster-{i}', residual_p)
                 ps_points.add_scalar_quantity(f'velocity-per-cluster-{i}', velocity_p)
-            print(f'icp={time.time()-t0}'); t0 = time.time()
         
         motion_stack = torch.stack(motion_list, dim=-1) # [M, 3, F]
         residual_stack = torch.stack(residual_list, dim=-1) # [M, F]
@@ -206,6 +238,8 @@ class EstimateMotionMask(object):
         motion_std = (motion_std.sum(-1)/3).sqrt()
         mean_velocity = mean_motion.norm(p=2, dim=-1)
         motion_mask = (mean_velocity > 0.15) & (motion_std < 0.05) & (num_points_per_cluster > 10)
+        motion_mask = motion_mask & ((max_z - min_z) > 0.2)
+        motion_mask_p = motion_mask[point2cluster]
 
         if self.visualize:
             mean_motion_p = mean_motion[point2cluster]
@@ -217,21 +251,21 @@ class EstimateMotionMask(object):
             ps_points.add_scalar_quantity(f'std(motion) per cluster', motion_std_p)
             ps_points.add_vector_quantity(f'mean motion per cluster', mean_motion_p)
             ps_points.add_scalar_quantity(f'velocity per cluster', mean_velocity_p)
-            ps_points.add_scalar_quantity(f'moving objects', motion_mask[point2cluster])
-        
-        motion_mask_p = motion_mask[point2cluster]
+            #ps_points.add_scalar_quantity(f'moving objects', motion_mask_p)
+            ps.register_point_cloud(f'moving objects', points[motion_mask_p], radius=4.5e-4, color=[1,1,0], enabled=True)
+            ps.show()
 
         out_dict = {}
         out_dict['velocity'] = mean_velocity
-        out_dict['motion'] = mean_motion
+        #out_dict['motion'] = mean_motion
         out_dict['std'] = motion_std
         out_dict['point2cluster'] = point2cluster
+        out_dict['valid_idx'] = valid_idx
+        out_dict['obj_idx'] = torch.where(obj_mask)[0]
         
         if self.eval_stats:
-            obj_mask = (motion_std[point2cluster] < -1)
-            for key in segments.keys():
-                obj_mask[segments[key]] = True
-            motion_mask_p = motion_mask[point2cluster]
+            if self.visualize:
+                ps.register_point_cloud(f'gt objects', points[obj_mask], radius=4e-4, color=[1,0,0], enabled=True)
 
             top = (motion_mask_p & obj_mask).float().sum()
             bottom = motion_mask_p.float().sum()
@@ -251,12 +285,14 @@ class EstimateMotionMask(object):
         sweep_points = [pc]
         if len(results['sweeps']) > self.sweeps_num:
             results['sweeps'] = results['sweeps'][:self.sweeps_num]
+        gs = GridSampling(0.1)
         for s in results['sweeps']:
             points = self._load_points(s['velodyne_path'])
             points = self._range_filter(points)
             Ti = Tinv @ s['pose']
             points.rotate(Ti[:3, :3].T)
             points.translate(Ti[:3, 3])
+            points.tensor = gs(Data(pos=points.tensor)).pos
             sweep_points.append(points)
             ts.append(s['timestamp'])
          
@@ -286,9 +322,9 @@ class EstimateMotionMask(object):
                         [sweep_points[i].tensor[:, :3] 
                             for i in range(1, len(sweep_points))], 
                         segments)
-                motion_dict['points'] = sweep_points[0].tensor[:, :3]
-                for i in range(1, len(sweep_points)):
-                    motion_dict[f'ref-{i-1}'] = sweep_points[i].tensor[:, :3]
+                #motion_dict['points'] = sweep_points[0].tensor[:, :3]
+                #for i in range(1, len(sweep_points)):
+                #    motion_dict[f'ref-{i-1}'] = sweep_points[i].tensor[:, :3]
                 print(f'saving to {filename_p}')
                 torch.save(motion_dict, filename_p)
         self.counter += 1

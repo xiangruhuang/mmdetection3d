@@ -73,7 +73,7 @@ def batched_icp(source_points, target_points, target_normals,
                 point2cluster, init_transf=None,
                 sigma=0.05, max_iter=40,
                 stopping_threshold=1e-2,
-                device='cuda:0'):
+                device='cpu'):
     """
     Args:
         source_points (torch.Tensor, shape=[N1, 3]): moving frame
@@ -88,6 +88,7 @@ def batched_icp(source_points, target_points, target_normals,
     """
     source_points = torch.as_tensor(source_points).float().to(device)
     target_points = torch.as_tensor(target_points).float().to(device)
+    target_points_cpu = target_points.detach().cpu()
     target_normals = torch.as_tensor(target_normals).float().to(device)
     point2cluster = torch.as_tensor(point2cluster).long().to(device)
     num_clusters = point2cluster.max()+1
@@ -101,6 +102,7 @@ def batched_icp(source_points, target_points, target_normals,
     active_mask = torch.as_tensor([True], dtype=torch.bool
                       ).repeat(num_clusters) # [M]
 
+    import time
     for sigma in [0.05, 0.2, 1.0]:
         p = source_points.clone()
         R, trans = gutil.unpack(transform) # [M, 3, 3], [M, 3]
@@ -109,8 +111,9 @@ def batched_icp(source_points, target_points, target_normals,
         for itr in range(max_iter):
             active_mask_p = active_mask[point2cluster] # [N]
             p_active = p[active_mask_p]
-            if itr % 5 == 0:
-                e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
+            t0 = time.time()
+            e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
+            #print(f'itr={itr}, p_active={active_mask_p.float().sum()}, time={(time.time()-t0):.4f}')
             nor = target_normals[e1] # [N, 3]
             q = target_points[e1] # [N, 3]
             d = ((p_active - q) * nor).sum(-1) # [N]
@@ -131,7 +134,11 @@ def batched_icp(source_points, target_points, target_normals,
             # torch.linalg.solve is not working...
             
             H = H + lamb*torch.eye(6).repeat(H.shape[0], 1, 1).to(H.device)
-            delta = torch.linalg.lstsq(H, g).solution.float() # [M, 6]
+            if H.is_cuda:
+                delta = torch.linalg.lstsq(H, g).solution.float() # [M, 6]
+            else:
+                delta = np.linalg.solve(H.numpy(), g.numpy())
+                delta = torch.as_tensor(delta).float().to(H.device)
             
             #g = -h.T.mm((d * weight).unsqueeze(-1)).squeeze(-1) # [6, 1]
             
@@ -147,7 +154,7 @@ def batched_icp(source_points, target_points, target_normals,
             if delta.norm(p=2, dim=-1).max() <= stopping_threshold:
                 break
             
-        e0, e1 = knn(target_points, p, 1).cuda()
+        e0, e1 = knn(target_points_cpu, p.detach().cpu(), 1).cuda()
         nor = target_normals[e1] # [N, 3]
         q = target_points[e1] # [N, 3]
         d = ((p - q) * nor).sum(-1) # [N]
@@ -157,7 +164,7 @@ def batched_icp(source_points, target_points, target_normals,
         if sigma < 0.8:
             transform[active_mask, :, :] = init_transf[active_mask]
 
-    return transform
+    return transform.detach().cpu()
 
 if __name__ == '__main__':
     import argparse
