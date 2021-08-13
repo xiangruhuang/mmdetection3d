@@ -29,6 +29,8 @@ def parse_args():
         '--logfile', type=str,
         help='place to holder evaluation results')
     parser.add_argument(
+        '--para_split', type=int, default=0)
+    parser.add_argument(
         '--eval',
         type=str,
         nargs='+',
@@ -98,15 +100,16 @@ def main():
     dataset = build_dataset(cfg.data.train)
     #data_loader = build_dataloader(
     #        dataset,
-    #        1,
-    #        1,
-    #        # cfg.gpus will be ignored if distributed
-    #        1,
+    #        6,
+    #        6,
+    #        6,
     #        dist=True,
     #        seed=816)
 
-    for i, data in enumerate(dataset):
-        print(i, len(dataset))
+    for i in range(10000, len(dataset)):
+        if i % 6 == args.para_split:
+            data = dataset[i]
+            print(i, len(dataset))
 
 if __name__ == '__main__':
     main()
