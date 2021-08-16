@@ -39,7 +39,7 @@ class EstimateMotionMask(object):
         if points_range_filter is not None:
             self.points_range_filter = build_from_cfg(points_range_filter, PIPELINES)
         self.counter = 0
-        self.stats = [0, 0]
+        self.stats = [0, 0, 0]
         self.visualize = visualize
         self.eval_stats = eval_stats
         self.sweeps_num = sweeps_num
@@ -248,11 +248,15 @@ class EstimateMotionMask(object):
             #for ths in [0.05, 0.1, 0.15, 0.2]:
             #    ps_points.add_scalar_quantity(f'std(motion) per cluster > {ths}',
             #                                  (motion_std_p > ths).float())
-            ps_points.add_scalar_quantity(f'std(motion) per cluster', motion_std_p)
-            ps_points.add_vector_quantity(f'mean motion per cluster', mean_motion_p)
-            ps_points.add_scalar_quantity(f'velocity per cluster', mean_velocity_p)
+            ps_points.add_scalar_quantity(
+                f'std(motion) per cluster', motion_std_p)
+            ps_points.add_vector_quantity(
+                f'mean motion per cluster', mean_motion_p)
+            ps_points.add_scalar_quantity(
+                f'velocity per cluster', mean_velocity_p)
             #ps_points.add_scalar_quantity(f'moving objects', motion_mask_p)
-            ps.register_point_cloud(f'moving objects', points[motion_mask_p], radius=4.5e-4, color=[1,1,0], enabled=True)
+            ps.register_point_cloud(f'moving objects', points[motion_mask_p],
+                radius=4.5e-4, color=[1,1,0], enabled=True)
             ps.show()
 
         out_dict = {}
@@ -271,9 +275,13 @@ class EstimateMotionMask(object):
             bottom = motion_mask_p.float().sum()
             self.stats[0] += top.item()
             self.stats[1] += bottom.item()
+            self.stats[2] += obj_mask.float().sum()
             if self.stats[1] > 0:
-                print(f'TP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}, TP={self.stats[0]}, FP={self.stats[1]-self.stats[0]}')
+                print(f'TP/(TP+FP)={self.stats[0]/self.stats[1]:.6f}, TP={self.stats[0]}, FP={self.stats[1]-self.stats[0]}, T={self.stats[2]}')
             out_dict['moving'] = obj_mask
+            out_dict['T'] = obj_mask.float().sum()
+            out_dict['TP'] = top.item()
+            out_dict['P'] = bottom.item()
 
         return out_dict
 
@@ -287,6 +295,9 @@ class EstimateMotionMask(object):
             results['sweeps'] = results['sweeps'][:self.sweeps_num]
         gs = GridSampling(0.1)
         for s in results['sweeps']:
+            vpath = s['velodyne_path']
+            vpath = vpath.replace('data/waymo/kitti_format/data', 'data')
+            print(f'loading sweep from {vpath}')
             points = self._load_points(s['velodyne_path'])
             points = self._range_filter(points)
             Ti = Tinv @ s['pose']
@@ -301,21 +312,27 @@ class EstimateMotionMask(object):
             vel = [[] for i in range(N)]
             normals = []
             gt_bbox = results['gt_bboxes_3d']
-            mask = gt_bbox.points_in_boxes(sweep_points[0].tensor[:, :3].cuda()).cpu()
+            mask = gt_bbox.points_in_boxes(
+                       sweep_points[0].tensor[:, :3].detach().cpu()) # [N, P]
             seg_mask = torch.zeros_like(mask)
             segments = {}
-            for i in range(mask.max()-1):
-                segment = segments.get(results['gt_names'][i], [])
-                segment.append(torch.where(mask == i)[0])
-                segments[results['gt_names'][i]] = segment
+            for i in range(mask.shape[0]):
+                if not (mask[i, :] == 1).any():
+                    continue
+                segname = results['gt_names'][i]
+                segment = segments.get(segname, [])
+                segment.append(torch.where(mask[i, :] == 1)[0])
+                segments[segname] = segment
             for name in segments.keys():
                 if len(segments[name]) == 1:
                     segments[name] = segments[name][0]
                 else:
-                    segments[name] = torch.cat(segments[name], dim=0)
+                    segments[name] = torch.cat(segments[name], dim=0).unique()
             filename = results['pts_filename']
             filename_p = filename.replace('velodyne', 'motion_mask').replace('.bin', '.pth')
             if not os.path.exists(filename_p):
+                t0 = time.time()
+                print(f'working on {filename_p}')
                 motion_dict = \
                     self.recursive_segment(
                         sweep_points[0].tensor[:, :3], 
@@ -325,11 +342,28 @@ class EstimateMotionMask(object):
                 #motion_dict['points'] = sweep_points[0].tensor[:, :3]
                 #for i in range(1, len(sweep_points)):
                 #    motion_dict[f'ref-{i-1}'] = sweep_points[i].tensor[:, :3]
-                print(f'saving to {filename_p}')
+                print(f'saving to {filename_p}, time={time.time()-t0}')
                 torch.save(motion_dict, filename_p)
         self.counter += 1
             
         return results
+
+@PIPELINES.register_module()
+class RemoveObjectLabels(object):
+    def __init__(self, interval=10):
+        self.interval = interval
+
+    def __call__(self, results):
+        pts_filename = results['pts_filename']
+        pts_id = int(pts_filename.split('/')[-1].split('.')[0])
+        if pts_id % self.interval != 0:
+            results['use_obj_labels'] = torch.as_tensor(False)
+        else:
+            results['use_obj_labels'] = torch.as_tensor(True)
+        return results
+
+    def __repr__(self):
+        return "RemoveObjectLabels"
 
 @PIPELINES.register_module()
 class RandomFlip3D(RandomFlip):

@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument(
         '--para_split', type=int, default=0)
     parser.add_argument(
+        '--para', type=int, default=1)
+    parser.add_argument(
         '--eval',
         type=str,
         nargs='+',
@@ -95,6 +97,7 @@ def parse_args():
     return args
 
 def main():
+    print('starting...')
     args = parse_args()
     cfg = Config.fromfile(args.config)
     dataset = build_dataset(cfg.data.train)
@@ -106,10 +109,12 @@ def main():
     #        dist=True,
     #        seed=816)
 
-    for i in range(0, len(dataset), 42):
-        if i % 6 == args.para_split:
-            data = dataset[i]
-            print(i, len(dataset))
+    with open(f'logs/{args.para_split}.log', 'w') as fout:
+        for i in range(len(dataset)):
+            if i % args.para == args.para_split:
+                fout.write(f'{i} / {len(dataset)}\n')
+                fout.flush()
+                data = dataset[i]
 
 if __name__ == '__main__':
     main()

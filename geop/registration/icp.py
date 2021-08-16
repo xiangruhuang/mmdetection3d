@@ -112,7 +112,7 @@ def batched_icp(source_points, target_points, target_normals,
             active_mask_p = active_mask[point2cluster] # [N]
             p_active = p[active_mask_p]
             t0 = time.time()
-            e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).cuda()
+            e0, e1 = knn(target_points_cpu, p_active.detach().cpu(), 1).to(device)
             #print(f'itr={itr}, p_active={active_mask_p.float().sum()}, time={(time.time()-t0):.4f}')
             nor = target_normals[e1] # [N, 3]
             q = target_points[e1] # [N, 3]
@@ -154,7 +154,7 @@ def batched_icp(source_points, target_points, target_normals,
             if delta.norm(p=2, dim=-1).max() <= stopping_threshold:
                 break
             
-        e0, e1 = knn(target_points_cpu, p.detach().cpu(), 1).cuda()
+        e0, e1 = knn(target_points_cpu, p.detach().cpu(), 1).to(device)
         nor = target_normals[e1] # [N, 3]
         q = target_points[e1] # [N, 3]
         d = ((p - q) * nor).sum(-1) # [N]

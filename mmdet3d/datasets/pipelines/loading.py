@@ -1,10 +1,12 @@
 import mmcv
 import numpy as np
+import torch
+import os
+from torch_scatter import scatter_add
 
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
-
 
 @PIPELINES.register_module()
 class LoadMultiViewImageFromFiles(object):
@@ -322,6 +324,68 @@ class NormalizePointsColor(object):
         repr_str += f'(color_mean={self.color_mean})'
         return repr_str
 
+@PIPELINES.register_module()
+class LoadMotionMask3D(object):
+    """Load Pre-computed motion masks.
+
+    """
+
+    def __init__(self,
+                 file_client_args=dict(backend='disk')):
+        self.file_client_args = file_client_args.copy()
+        self.file_client = None
+
+    def __call__(self, results):
+        """Call function to load motion mask from file.
+
+        Args:
+            results (dict): Result dict containing point clouds data.
+
+        Returns:
+            dict: The result dict containing the point clouds data. \
+                Added key and value are described below.
+
+                - points (:obj:`BasePoints`): Point clouds data.
+        """
+        pts_filename = results['pts_filename']
+        motion_filename = pts_filename.replace('/velodyne/', '/motion_mask/').replace('.bin', '.pth')
+        if not os.path.exists(motion_filename):
+            points = results['points']
+            mask = torch.zeros(points.shape[0], dtype=torch.bool)
+            mask[:] = False
+            mask = BasePoints(mask.unsqueeze(-1), points_dim=1) # fake
+            results['motion_mask_3d'] = mask
+            return results
+        else:
+            data = torch.load(motion_filename)
+            valid_idx = data['valid_idx']
+            points = results['points']
+            point2cluster = torch.as_tensor(data['point2cluster'],
+                                            dtype=torch.long)
+            num_cluster = point2cluster.max()+1
+            velocity = data['velocity']
+            std = data['std']
+            npoints = scatter_add(
+                torch.ones(valid_idx.shape[0], dtype=torch.long),
+                point2cluster, dim=0, dim_size=num_cluster)
+            mask_by_cluster = (npoints > 10) & (velocity > 0.15) & (std < 0.05)
+            mask = torch.zeros(points.shape[0], dtype=torch.bool)
+            mask[:] = False
+            mask[valid_idx] = mask_by_cluster[point2cluster]
+            mask = BasePoints(mask.unsqueeze(-1), points_dim=1) # fake
+            results['motion_mask_3d'] = mask
+            
+            return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__ + '('
+        repr_str += f'shift_height={self.shift_height}, '
+        repr_str += f'use_color={self.use_color}, '
+        repr_str += f'file_client_args={self.file_client_args}, '
+        repr_str += f'load_dim={self.load_dim}, '
+        repr_str += f'use_dim={self.use_dim})'
+        return repr_str
 
 @PIPELINES.register_module()
 class LoadPointsFromFile(object):

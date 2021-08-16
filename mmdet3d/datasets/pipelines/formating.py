@@ -208,6 +208,10 @@ class DefaultFormatBundle3D(DefaultFormatBundle):
         if 'points' in results:
             assert isinstance(results['points'], BasePoints)
             results['points'] = DC(results['points'].tensor)
+        
+        if 'motion_mask_3d' in results:
+            assert isinstance(results['motion_mask_3d'], BasePoints)
+            results['motion_mask_3d'] = DC(results['motion_mask_3d'].tensor)
 
         for key in ['voxels', 'coors', 'voxel_centers', 'num_points']:
             if key not in results:

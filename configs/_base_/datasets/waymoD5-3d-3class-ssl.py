@@ -41,7 +41,10 @@ train_pipeline = [
         with_bbox_3d=True,
         with_label_3d=True,
         file_client_args=file_client_args),
-    dict(type='ObjectSample', db_sampler=db_sampler),
+    #dict(type='ObjectSample', db_sampler=db_sampler),
+    dict(
+        type='LoadMotionMask3D',
+        ),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -55,7 +58,11 @@ train_pipeline = [
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='PointShuffle'),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
-    dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
+    dict(
+        type='RemoveObjectLabels',
+        interval=10,
+        ),
+    dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d', 'motion_mask_3d', 'use_obj_labels']),
 ]
 test_pipeline = [
     dict(
