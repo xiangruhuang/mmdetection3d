@@ -105,7 +105,6 @@ class SparseEncoder(nn.Module):
         Returns:
             dict: Backbone features.
         """
-        import ipdb; ipdb.set_trace()
         coors = coors.int()
         input_sp_tensor = spconv.SparseConvTensor(voxel_features, coors,
                                                   self.sparse_shape,

@@ -1,7 +1,6 @@
 from mmdet.apis import train_detector
 from mmseg.apis import train_segmentor
 
-
 def train_model(model,
                 dataset,
                 cfg,

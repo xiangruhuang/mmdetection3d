@@ -131,9 +131,8 @@ def main():
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
         # re-set gpu_ids with distributed training mode
-        _, world_size = get_dist_info()
+        rank, world_size = get_dist_info()
         cfg.gpu_ids = range(world_size)
-
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
     # dump config
@@ -183,7 +182,7 @@ def main():
 
     #logger.info(f'Model:\n{model}')
     datasets = [build_dataset(cfg.data.train)]
-    logger.info(f'Training Dataset:\n{datasets[0]}')
+    #logger.info(f'Training Dataset:\n{datasets[0]}')
 
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
@@ -210,6 +209,7 @@ def main():
             if hasattr(datasets[0], 'PALETTE') else None)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+
     train_model(
         model,
         datasets,

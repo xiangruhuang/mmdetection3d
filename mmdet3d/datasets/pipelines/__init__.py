@@ -11,7 +11,6 @@ from .transforms_3d import (BackgroundPointsFilter, GlobalAlignment,
                             IndoorPointSample, ObjectNoise, ObjectRangeFilter,
                             ObjectSample, PointShuffle, PointsRangeFilter,
                             RandomFlip3D, VoxelBasedPointSampler, FPSPointSample, EstimateMotionMask)
-
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
     'PointShuffle', 'ObjectRangeFilter', 'PointsRangeFilter', 'Collect3D',

@@ -14,7 +14,7 @@ class_names = [
     'Cyclist',
 ]
 
-point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
+point_cloud_range = [-74.88, -74.88, 0.3, 74.88, 74.88, 4]
 
 model = dict(
     pts_voxel_layer=dict(point_cloud_range=point_cloud_range),
@@ -22,4 +22,9 @@ model = dict(
     # model training and testing settings
     train_cfg=dict(pts=dict(point_cloud_range=point_cloud_range)),
     test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2], nms_type='circle')))
+
+workflow = [('train', 1)]
+runner = dict(type='EpochBasedRunner', max_epochs=40)
+resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/latest.pth'
+eval_options=dict(prklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
 
