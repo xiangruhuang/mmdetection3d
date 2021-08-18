@@ -13,7 +13,6 @@ from mmdet3d.ops import Points_Sampler
 from torch_geometric.nn import knn, fps, radius, knn_interpolate
 from mmdet3d.ops import points_in_boxes_cpu
 import polyscope as ps 
-import open3d as o3d
 import os
 #from pytorch3d.transforms.rotation_conversions import \
 #    matrix_to_quaternion, quaternion_to_matrix, \
@@ -117,6 +116,7 @@ class EstimateMotionMask(object):
         return motion, residual, new_pos
 
     def recursive_segment(self, points, ref_points_list, segments):
+        import open3d as o3d
         t0 = time.time()
         e0, e1 = radius(points, points, r=0.4, max_num_neighbors=64)
         diff = (points[e0] - points[e1])
@@ -298,7 +298,7 @@ class EstimateMotionMask(object):
             vpath = s['velodyne_path']
             vpath = vpath.replace('data/waymo/kitti_format/data', 'data')
             print(f'loading sweep from {vpath}')
-            points = self._load_points(s['velodyne_path'])
+            points = self._load_points(vpath)
             points = self._range_filter(points)
             Ti = Tinv @ s['pose']
             points.rotate(Ti[:3, :3].T)

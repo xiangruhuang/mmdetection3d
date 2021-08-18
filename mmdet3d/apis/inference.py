@@ -14,7 +14,6 @@ from mmdet3d.core.bbox import get_box_type
 from mmdet3d.datasets.pipelines import Compose
 from mmdet3d.models import build_model
 
-
 def convert_SyncBN(config):
     """Convert config's naiveSyncBN to BN.
 

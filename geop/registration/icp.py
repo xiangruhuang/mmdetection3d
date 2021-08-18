@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import open3d as o3d
 import sys
 from sklearn.neighbors import NearestNeighbors as NN
 import geop.geometry.util as gutil
@@ -21,6 +20,7 @@ from torch_geometric.nn import knn
 def icp_reweighted(source, target, sigma=0.01, max_iter = 100,
                    stopping_threshold=1e-4):
     """ If target has no normals, estimate """
+    import open3d as o3d
     if np.array(target.normals).shape[0] == 0:
         search_param = o3d.geometry.KDTreeSearchParamHybrid(
                                         radius=0.2, max_nn=30)
@@ -166,38 +166,38 @@ def batched_icp(source_points, target_points, target_normals,
 
     return transform.detach().cpu()
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='reweighted ICP algorithm')
-    parser.add_argument('--source', type=str,
-                        help='source point cloud or mesh in .ply format')
-    parser.add_argument('--target', type=str,
-                        help='target point cloud or mesh in .ply format')
-    args = parser.parse_args()
-
-    source = o3d.io.read_point_cloud(args.source)
-    try:
-        mesh = o3d.read_triangle_mesh(args.target)
-        if np.array(mesh.triangles).shape[0] == 0:
-            assert False
-        v = np.array(mesh.vertices)
-        tri = np.array(mesh.triangles)
-        v1 = v[tri[:, 0], :]
-        v2 = v[tri[:, 1], :]
-        v3 = v[tri[:, 2], :]
-        normals = np.cross(v1-v3, v2-v3)
-        normals = (normals.T / np.linalg.norm(normals, 2, axis=1)).T
-        centers = (v1+v2+v3)/3.0
-
-        target = o3d.PointCloud()
-        target.points = o3d.utility.Vector3dVector(centers)
-        target.normals = o3d.utility.Vector3dVector(normals)
-    except:
-        target = o3d.io.read_point_cloud(args.target)
-        search_param = o3d.geometry.KDTreeSearchParamHybrid(
-                                        radius=0.2, max_nn=30)
-        target.estimate_normals(search_param=search_param)
-
-    transformation = icp_reweighted(source, target)
-    source.transform(transformation)
-    o3d.visualization.draw_geometries([source, target])
+#if __name__ == '__main__':
+#    import argparse
+#    parser = argparse.ArgumentParser(description='reweighted ICP algorithm')
+#    parser.add_argument('--source', type=str,
+#                        help='source point cloud or mesh in .ply format')
+#    parser.add_argument('--target', type=str,
+#                        help='target point cloud or mesh in .ply format')
+#    args = parser.parse_args()
+#
+#    source = o3d.io.read_point_cloud(args.source)
+#    try:
+#        mesh = o3d.read_triangle_mesh(args.target)
+#        if np.array(mesh.triangles).shape[0] == 0:
+#            assert False
+#        v = np.array(mesh.vertices)
+#        tri = np.array(mesh.triangles)
+#        v1 = v[tri[:, 0], :]
+#        v2 = v[tri[:, 1], :]
+#        v3 = v[tri[:, 2], :]
+#        normals = np.cross(v1-v3, v2-v3)
+#        normals = (normals.T / np.linalg.norm(normals, 2, axis=1)).T
+#        centers = (v1+v2+v3)/3.0
+#
+#        target = o3d.PointCloud()
+#        target.points = o3d.utility.Vector3dVector(centers)
+#        target.normals = o3d.utility.Vector3dVector(normals)
+#    except:
+#        target = o3d.io.read_point_cloud(args.target)
+#        search_param = o3d.geometry.KDTreeSearchParamHybrid(
+#                                        radius=0.2, max_nn=30)
+#        target.estimate_normals(search_param=search_param)
+#
+#    transformation = icp_reweighted(source, target)
+#    source.transform(transformation)
+#    o3d.visualization.draw_geometries([source, target])

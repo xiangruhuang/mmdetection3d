@@ -180,7 +180,8 @@ def create_waymo_info_file(data_path,
         pose=True,
         image_ids=train_img_ids,
         relative_path=relative_path,
-        max_sweeps=max_sweeps)
+        max_sweeps=max_sweeps,
+        with_imageshape=False)
     _calculate_num_points_in_gt(
         data_path,
         waymo_infos_train,
@@ -198,7 +199,8 @@ def create_waymo_info_file(data_path,
         pose=True,
         image_ids=val_img_ids,
         relative_path=relative_path,
-        max_sweeps=max_sweeps)
+        max_sweeps=max_sweeps,
+        with_imageshape=False)
     _calculate_num_points_in_gt(
         data_path,
         waymo_infos_val,
@@ -220,7 +222,8 @@ def create_waymo_info_file(data_path,
         pose=True,
         image_ids=test_img_ids,
         relative_path=relative_path,
-        max_sweeps=max_sweeps)
+        max_sweeps=max_sweeps,
+        with_imageshape=False)
     filename = save_path / f'{pkl_prefix}_infos_test.pkl'
     print(f'Waymo info test file is saved to {filename}')
     mmcv.dump(waymo_infos_test, filename)

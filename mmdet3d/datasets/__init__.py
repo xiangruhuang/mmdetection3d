@@ -19,7 +19,8 @@ from .scannet_dataset import ScanNetDataset, ScanNetSegDataset
 from .semantickitti_dataset import SemanticKITTIDataset
 from .sunrgbd_dataset import SUNRGBDDataset
 from .utils import get_loading_pipeline
-from .waymo_dataset import WaymoDataset, WaymoGTDataset
+from .waymo_dataset import WaymoDataset
+from .waymo_gt_dataset import WaymoGTDataset
 
 __all__ = [
     'KittiDataset', 'KittiMonoDataset', 'GroupSampler',
@@ -32,6 +33,6 @@ __all__ = [
     'LoadAnnotations3D', 'GlobalAlignment', 'SUNRGBDDataset', 'ScanNetDataset',
     'ScanNetSegDataset', 'SemanticKITTIDataset', 'Custom3DDataset',
     'Custom3DSegDataset', 'LoadPointsFromMultiSweeps', 'WaymoDataset',
-    'WaymoGTDataset',
-    'BackgroundPointsFilter', 'VoxelBasedPointSampler', 'get_loading_pipeline'
+    'WaymoGTDataset', 'BackgroundPointsFilter', 'VoxelBasedPointSampler',
+    'get_loading_pipeline'
 ]

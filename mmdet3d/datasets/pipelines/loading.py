@@ -357,14 +357,18 @@ class LoadMotionMask3D(object):
             results['motion_mask_3d'] = mask
             return results
         else:
-            data = torch.load(motion_filename)
+            data = torch.load(motion_filename, map_location='cpu')
             valid_idx = data['valid_idx']
             points = results['points']
+            assert not valid_idx.is_cuda
+            assert not points.tensor.is_cuda
             point2cluster = torch.as_tensor(data['point2cluster'],
                                             dtype=torch.long)
             num_cluster = point2cluster.max()+1
             velocity = data['velocity']
             std = data['std']
+            assert not velocity.is_cuda
+            assert not std.is_cuda
             npoints = scatter_add(
                 torch.ones(valid_idx.shape[0], dtype=torch.long),
                 point2cluster, dim=0, dim_size=num_cluster)
@@ -379,12 +383,7 @@ class LoadMotionMask3D(object):
 
     def __repr__(self):
         """str: Return a string that describes the module."""
-        repr_str = self.__class__.__name__ + '('
-        repr_str += f'shift_height={self.shift_height}, '
-        repr_str += f'use_color={self.use_color}, '
-        repr_str += f'file_client_args={self.file_client_args}, '
-        repr_str += f'load_dim={self.load_dim}, '
-        repr_str += f'use_dim={self.use_dim})'
+        repr_str = self.__class__.__name__ + '()'
         return repr_str
 
 @PIPELINES.register_module()

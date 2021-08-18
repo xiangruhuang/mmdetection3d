@@ -11,7 +11,7 @@ file_client_args = dict(backend='disk')
 #     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
 class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
+point_cloud_range = [-74.88, -74.88, 0.3, 74.88, 74.88, 4]
 input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
@@ -42,9 +42,9 @@ train_pipeline = [
         with_label_3d=True,
         file_client_args=file_client_args),
     #dict(type='ObjectSample', db_sampler=db_sampler),
-    dict(
-        type='LoadMotionMask3D',
-        ),
+    #dict(
+    #    type='LoadMotionMask3D',
+    #    ),
     dict(
         type='RandomFlip3D',
         sync_2d=False,
@@ -58,11 +58,15 @@ train_pipeline = [
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='PointShuffle'),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
+    #dict(
+    #    type='RemoveObjectLabels',
+    #    interval=10,
+    #    ),
     dict(
-        type='RemoveObjectLabels',
-        interval=10,
+        type='Collect3D',
+        keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'],
+              #'motion_mask_3d', 'use_obj_labels']
         ),
-    dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d', 'motion_mask_3d', 'use_obj_labels']),
 ]
 test_pipeline = [
     dict(
@@ -109,25 +113,22 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=3,
+    workers_per_gpu=3,
     train=dict(
-        type='RepeatDataset',
-        times=2,
-        dataset=dict(
-            type=dataset_type,
-            data_root=data_root,
-            ann_file=data_root + 'waymo_infos_train.pkl',
-            split='training',
-            pipeline=train_pipeline,
-            modality=input_modality,
-            classes=class_names,
-            test_mode=False,
-            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-            box_type_3d='LiDAR',
-            # load one frame every five frames
-            load_interval=1)),
+        type=dataset_type,
+        data_root=data_root,
+        ann_file=data_root + 'waymo_infos_train.pkl',
+        split='training',
+        pipeline=train_pipeline,
+        modality=input_modality,
+        classes=class_names,
+        test_mode=False,
+        # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
+        # and box_type_3d='Depth' in sunrgbd and scannet dataset.
+        box_type_3d='LiDAR',
+        # load one frame every five frames
+        load_interval=10),
     val=dict(
         type=dataset_type,
         data_root=data_root,
@@ -149,4 +150,4 @@ data = dict(
         test_mode=True,
         box_type_3d='LiDAR'))
 
-evaluation = dict(interval=1, pipeline=eval_pipeline)
+evaluation = dict(interval=40, pipeline=eval_pipeline)

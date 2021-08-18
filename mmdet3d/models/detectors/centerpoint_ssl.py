@@ -122,17 +122,10 @@ class CenterPointSSL(MVXTwoStageDetector):
         Returns:
             dict: Losses of different branches.
         """
-        
         losses = dict()
-        print(use_obj_labels)
-        if use_obj_labels.float().sum() > 0:
-            points_s = [p for p, u in zip(points, use_obj_labels) if u]
-            if img is not None:
-                img_s = [im for im, u in zip(img, use_obj_labels) if u]
-            else:
-                img_s = img
+        if (use_obj_labels is None):
             img_feats, pts_feats = self.extract_feat(
-                points_s, img=img_s, img_metas=img_metas)
+                points, img=img, img_metas=img_metas)
             if pts_feats:
                 losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
                                                     gt_labels_3d, img_metas,
@@ -147,12 +140,30 @@ class CenterPointSSL(MVXTwoStageDetector):
                     gt_bboxes_ignore=gt_bboxes_ignore,
                     proposals=proposals)
                 losses.update(losses_img)
+        elif use_obj_labels.float().sum() > 0:
+            points_s = [p for p, u in zip(points, use_obj_labels) if u]
+            gt_bboxes_3d = [p for p, u in zip(gt_bboxes_3d, use_obj_labels) if u]
+            gt_labels_3d = [p for p, u in zip(gt_labels_3d, use_obj_labels) if u]
+            if img is not None:
+                img = [im for im, u in zip(img, use_obj_labels) if u]
+            if img_metas is not None:
+                img_metas = [im for im, u in zip(img_metas, use_obj_labels) if u]
+            if gt_bboxes_ignore is not None:
+                gt_bboxes_ignore = [im for im, u in zip(gt_bboxes_ignore, use_obj_labels) if u]
+            img_feats, pts_feats = self.extract_feat(
+                points_s, img=img, img_metas=img_metas)
+            if pts_feats:
+                losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
+                                                    gt_labels_3d, img_metas,
+                                                    gt_bboxes_ignore)
+                losses.update(losses_pts)
         else:
-            losses['loss_fake'] = torch.nn.Parameter(torch.zeros(1), requires_grad=True)
-        points_m = [p for p, m in zip(points, motion_mask_3d) if m.float().sum()>0]
-        if len(points_m) > 0:
-            pass
-        
+            losses['loss_fake'] = torch.nn.Parameter(torch.zeros(1), requires_grad=True).to(points[0].device)
+        if motion_mask_3d is not None:
+            points_m = [p for p, m in zip(points, motion_mask_3d) if m.float().sum()>0]
+            if len(points_m) > 0:
+                pass
+
         return losses
 
 
