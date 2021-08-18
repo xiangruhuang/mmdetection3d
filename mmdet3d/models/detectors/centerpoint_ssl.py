@@ -3,7 +3,7 @@ import torch
 from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
 from mmdet.models import DETECTORS
 from .mvx_two_stage import MVXTwoStageDetector
-
+import polyscope as ps
 
 @DETECTORS.register_module()
 class CenterPointSSL(MVXTwoStageDetector):
@@ -39,10 +39,21 @@ class CenterPointSSL(MVXTwoStageDetector):
             return None
         voxels, num_points, coors = self.voxelize(pts)
 
-        import ipdb; ipdb.set_trace()
         voxel_features = self.pts_voxel_encoder(voxels, num_points, coors)
         batch_size = coors[-1, 0] + 1
-        x = self.pts_middle_encoder(voxel_features, coors, batch_size)
+        x, ef = self.pts_middle_encoder(voxel_features, coors, batch_size,
+                    return_encode_features=True)
+
+        import ipdb; ipdb.set_trace()
+        ps.set_up_dir('z_up')
+        ps.init()
+        voxel_points = voxels.view(-1, voxels.shape[-1])
+        for i in range(len(pts)):
+            ps.register_point_cloud(f'pts-{i}',
+                pts[i][:, :3].detach().cpu(), radius=2e-4)
+        ps.register_point_cloud('point in voxels',
+            voxel_points[:, :3].detach().cpu(), radius=2e-4)
+        ps.show()
         x = self.pts_backbone(x)
         if self.with_pts_neck:
             x = self.pts_neck(x)
@@ -111,24 +122,37 @@ class CenterPointSSL(MVXTwoStageDetector):
         Returns:
             dict: Losses of different branches.
         """
-        import ipdb; ipdb.set_trace()
-        img_feats, pts_feats = self.extract_feat(
-            points, img=img, img_metas=img_metas)
+        
         losses = dict()
-        if pts_feats:
-            losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
-                                                gt_labels_3d, img_metas,
-                                                gt_bboxes_ignore)
-            losses.update(losses_pts)
-        if img_feats:
-            losses_img = self.forward_img_train(
-                img_feats,
-                img_metas=img_metas,
-                gt_bboxes=gt_bboxes,
-                gt_labels=gt_labels,
-                gt_bboxes_ignore=gt_bboxes_ignore,
-                proposals=proposals)
-            losses.update(losses_img)
+        print(use_obj_labels)
+        if use_obj_labels.float().sum() > 0:
+            points_s = [p for p, u in zip(points, use_obj_labels) if u]
+            if img is not None:
+                img_s = [im for im, u in zip(img, use_obj_labels) if u]
+            else:
+                img_s = img
+            img_feats, pts_feats = self.extract_feat(
+                points_s, img=img_s, img_metas=img_metas)
+            if pts_feats:
+                losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
+                                                    gt_labels_3d, img_metas,
+                                                    gt_bboxes_ignore)
+                losses.update(losses_pts)
+            if img_feats:
+                losses_img = self.forward_img_train(
+                    img_feats,
+                    img_metas=img_metas,
+                    gt_bboxes=gt_bboxes,
+                    gt_labels=gt_labels,
+                    gt_bboxes_ignore=gt_bboxes_ignore,
+                    proposals=proposals)
+                losses.update(losses_img)
+        else:
+            losses['loss_fake'] = torch.nn.Parameter(torch.zeros(1), requires_grad=True)
+        points_m = [p for p, m in zip(points, motion_mask_3d) if m.float().sum()>0]
+        if len(points_m) > 0:
+            pass
+        
         return losses
 
 
