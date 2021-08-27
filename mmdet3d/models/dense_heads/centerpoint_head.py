@@ -401,19 +401,19 @@ class CenterHead(nn.Module):
             self.get_targets_single, gt_bboxes_3d, gt_labels_3d)
         # transpose heatmaps, because the dimension of tensors in each task is
         # different, we have to use numpy instead of torch to do the transpose.
-        heatmaps = [[heatmaps[i][j] for i in range(len(heatmaps))] for j in range(len(heatmaps[0]))]
-        heatmaps = [torch.stack(heatmaps_) for heatmaps_ in heatmaps]
+        heatmaps = list(map(list, zip(*heatmaps)))
+        heatmaps = [torch.stack(hms_) for hms_ in heatmaps]
         
         # transpose anno_boxes
-        anno_boxes = [[anno_boxes[i][j] for i in range(len(anno_boxes))] for j in range(len(anno_boxes[0]))]
+        anno_boxes = list(map(list, zip(*anno_boxes)))
         anno_boxes = [torch.stack(anno_boxes_) for anno_boxes_ in anno_boxes]
 
         # transpose inds
-        inds = [[inds[i][j] for i in range(len(inds))] for j in range(len(inds[0]))]
+        inds = list(map(list, zip(*inds)))
         inds = [torch.stack(inds_) for inds_ in inds]
 
         # transpose inds
-        masks = [[masks[i][j] for i in range(len(masks))] for j in range(len(masks[0]))]
+        masks = list(map(list, zip(*masks)))
         masks = [torch.stack(masks_) for masks_ in masks]
 
         return heatmaps, anno_boxes, inds, masks
@@ -488,7 +488,6 @@ class CenterHead(nn.Module):
 
             for k in range(num_objs):
                 cls_id = task_classes[idx][k] - 1
-
                 width = task_boxes[idx][k][3]
                 length = task_boxes[idx][k][4]
                 width = width / voxel_size[0] / self.train_cfg[
@@ -506,7 +505,6 @@ class CenterHead(nn.Module):
                     # your box annotation.
                     x, y, z = task_boxes[idx][k][0], task_boxes[idx][k][
                         1], task_boxes[idx][k][2]
-
                     coor_x = (
                         x - pc_range[0]
                     ) / voxel_size[0] / self.train_cfg['out_size_factor']
@@ -518,7 +516,6 @@ class CenterHead(nn.Module):
                                           dtype=torch.float32,
                                           device=device)
                     center_int = center.to(torch.int32)
-
                     # throw out not in range objects to avoid out of array
                     # area when creating the heatmap
                     if not (0 <= center_int[0] < feature_map_size[0]

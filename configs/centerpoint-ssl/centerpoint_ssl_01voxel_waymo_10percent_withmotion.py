@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/waymoD5-3d-3class-ssl.py',
+    '../_base_/datasets/waymoD5-3d-3class-ssl-withmotion.py',
     '../_base_/models/centerpoint_ssl_01voxel_waymo.py',
     '../_base_/schedules/cyclic_20e.py', '../_base_/default_runtime.py'
 ]
@@ -21,7 +21,16 @@ model = dict(
     pts_bbox_head=dict(bbox_coder=dict(pc_range=point_cloud_range[:2])),
     # model training and testing settings
     train_cfg=dict(pts=dict(point_cloud_range=point_cloud_range)),
-    test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2], nms_type='circle')))
+    test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2], nms_type='circle')),
+    ssl_mlps=dict(ssl_channels=[
+        ([5, 128, 2], 0.0),
+        ([16, 128, 2], 0.5),
+        ([32, 128, 2], 0.5),
+        ([64, 128, 2], 0.5),
+        ([128, 128, 2], 0.5),
+        ([128, 128, 2], 0.5),
+        ])
+    )
 
 workflow = [('train', 1)]
 runner = dict(type='EpochBasedRunner', max_epochs=40)

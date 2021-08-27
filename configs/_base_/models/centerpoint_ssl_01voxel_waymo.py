@@ -1,4 +1,4 @@
-voxel_size = [0.1, 0.1, 0.2]
+voxel_size = [0.15, 0.15, 0.2]
 model = dict(
     type='CenterPointSSL',
     pts_voxel_layer=dict(
