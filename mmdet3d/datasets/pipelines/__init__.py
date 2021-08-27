@@ -10,14 +10,15 @@ from .transforms_3d import (BackgroundPointsFilter, GlobalAlignment,
                             GlobalRotScaleTrans, IndoorPatchPointSample,
                             IndoorPointSample, ObjectNoise, ObjectRangeFilter,
                             ObjectSample, PointShuffle, PointsRangeFilter,
-                            RandomFlip3D, VoxelBasedPointSampler, FPSPointSample, EstimateMotionMask)
+                            RandomFlip3D, VoxelBasedPointSampler, FPSPointSample,
+                            EstimateMotionMask, ExtractMotionMask3D)
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
     'PointShuffle', 'ObjectRangeFilter', 'PointsRangeFilter', 'Collect3D',
     'Compose', 'LoadMultiViewImageFromFiles', 'LoadPointsFromFile',
     'DefaultFormatBundle', 'DefaultFormatBundle3D', 'DataBaseSampler',
     'NormalizePointsColor', 'LoadAnnotations3D', 'IndoorPointSample',
-    'PointSegClassMapping', 'LoadMotionMask3D', 
+    'PointSegClassMapping', 'LoadMotionMask3D', 'ExtractMotionMask3D', 
     'MultiScaleFlipAug3D', 'LoadPointsFromMultiSweeps',
     'BackgroundPointsFilter', 'VoxelBasedPointSampler', 'GlobalAlignment',
     'IndoorPatchPointSample', 'LoadImageFromFileMono3D', 'FPSPointSample', 'EstimateMotionMask',

@@ -351,13 +351,17 @@ class LoadMotionMask3D(object):
         motion_filename = pts_filename.replace('/velodyne/', '/motion_mask/').replace('.bin', '.pth')
         if not os.path.exists(motion_filename):
             points = results['points']
-            mask = torch.zeros(points.shape[0], dtype=torch.bool)
-            mask[:] = False
-            mask = BasePoints(mask.unsqueeze(-1), points_dim=1) # fake
-            results['motion_mask_3d'] = mask
+            mask = torch.zeros(points.shape[0], dtype=torch.float32)
+            mask[:] = 0
+            #mask = BasePoints(mask.unsqueeze(-1), points_dim=1) # fake
+            #results['motion_mask_3d'] = mask
+            new_tensor = torch.cat([points.tensor, mask.unsqueeze(-1).to(points.tensor)], dim=-1)
+            points_cls = get_points_type('LIDAR')
+            results['points'] = points_cls(new_tensor, new_tensor.shape[-1])
             return results
         else:
             data = torch.load(motion_filename, map_location='cpu')
+            print(motion_filename)
             valid_idx = data['valid_idx']
             points = results['points']
             assert not valid_idx.is_cuda
@@ -373,11 +377,12 @@ class LoadMotionMask3D(object):
                 torch.ones(valid_idx.shape[0], dtype=torch.long),
                 point2cluster, dim=0, dim_size=num_cluster)
             mask_by_cluster = (npoints > 10) & (velocity > 0.15) & (std < 0.05)
-            mask = torch.zeros(points.shape[0], dtype=torch.bool)
-            mask[:] = False
-            mask[valid_idx] = mask_by_cluster[point2cluster]
-            mask = BasePoints(mask.unsqueeze(-1), points_dim=1) # fake
-            results['motion_mask_3d'] = mask
+            mask = torch.zeros(points.shape[0], dtype=torch.float32)
+            mask[:] = 0
+            mask[valid_idx] = mask_by_cluster[point2cluster].float().to(points.tensor)
+            new_tensor = torch.cat([points.tensor, mask.unsqueeze(-1)], dim=-1)
+            points_cls = get_points_type('LIDAR')
+            results['points'] = points_cls(new_tensor, new_tensor.shape[-1])
             
             return results
 

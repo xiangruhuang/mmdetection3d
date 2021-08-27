@@ -4,6 +4,7 @@ from mmcv.utils import build_from_cfg
 import torch
 
 from mmdet3d.core import VoxelGenerator
+from mmdet3d.core.points import get_points_type
 from mmdet3d.core.bbox import box_np_ops
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import RandomFlip
@@ -24,6 +25,20 @@ from torch_scatter import scatter
 from torch_geometric.data import Data
 from torch_geometric.transforms import GridSampling
 import time
+
+@PIPELINES.register_module()
+class ExtractMotionMask3D(object):
+    def __init__(self, points_type='LIDAR'):
+        self.points_cls = get_points_type(points_type)
+
+    def __call__(self, results):
+        new_tensor = results['points'].tensor[:, :5]
+        mask = results['points'].tensor[:, 5]
+        results['points'] = self.points_cls(
+            new_tensor, new_tensor.shape[-1])
+        results['motion_mask_3d'] = mask
+
+        return results
 
 @PIPELINES.register_module()
 class EstimateMotionMask(object):

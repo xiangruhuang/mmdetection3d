@@ -3,7 +3,10 @@ import torch
 from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
 from mmdet.models import DETECTORS
 from .mvx_two_stage import MVXTwoStageDetector
-
+import polyscope as ps
+from mmcv.cnn import ConvModule
+from torch_geometric.nn import radius
+from torch_scatter import scatter
 
 @DETECTORS.register_module()
 class CenterPointSSL(MVXTwoStageDetector):
@@ -24,14 +27,53 @@ class CenterPointSSL(MVXTwoStageDetector):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 pre_pointnet2_layer=None):
+                 ssl_mlps=None):
         super(CenterPointSSL,
               self).__init__(pts_voxel_layer, pts_voxel_encoder,
                              pts_middle_encoder, pts_fusion_layer,
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
-        self.pre_pointnet2_layer = pre_pointnet2_layer
+
+        if ssl_mlps is not None:
+            ssl_channels = ssl_mlps['ssl_channels']
+            if ssl_mlps.get('norm_cfg', None) is None:
+                norm_cfg = dict(type='BN2d')
+            else:
+                norm_cfg = ssl_mlps['norm_cfg']
+            self.ssl_weights = []
+            self.ssl_mlps = []
+            for s, (ssl_channel, ssl_weight) in enumerate(ssl_channels):
+                mlp = torch.nn.Sequential()
+                for i in range(len(ssl_channel) - 2):
+                    mlp.add_module(
+                        f'sslmlp{i}',
+                        ConvModule(
+                            ssl_channel[i],
+                            ssl_channel[i+1],
+                            kernel_size=(1, 1),
+                            stride=(1, 1),
+                            conv_cfg=dict(type='Conv2d'),
+                            norm_cfg=norm_cfg,
+                            bias=True,
+                            ))
+                i = len(ssl_channel) - 2
+                mlp.add_module(
+                        f'sslmlp{i}',
+                        ConvModule(
+                            ssl_channel[i],
+                            ssl_channel[i + 1],
+                            kernel_size=(1, 1),
+                            stride=(1, 1),
+                            conv_cfg=dict(type='Conv2d'),
+                            norm_cfg=None,
+                            act_cfg=None,
+                            bias=True))
+                self.ssl_mlps.append(mlp)
+                self.ssl_weights.append(ssl_weight)
+            self.ssl_mlps = torch.nn.ModuleList(self.ssl_mlps)
+            self.ce_loss = torch.nn.CrossEntropyLoss(
+                weight=torch.as_tensor([1e-2, 1.0]))
 
     def extract_pts_feat(self, pts, img_feats, img_metas):
         """Extract features of points."""
@@ -41,11 +83,14 @@ class CenterPointSSL(MVXTwoStageDetector):
 
         voxel_features = self.pts_voxel_encoder(voxels, num_points, coors)
         batch_size = coors[-1, 0] + 1
-        x = self.pts_middle_encoder(voxel_features, coors, batch_size)
+        x, ef = self.pts_middle_encoder(voxel_features, coors, batch_size,
+                    return_encode_features=True)
+        
+        voxel_points = voxels.view(-1, voxels.shape[-1])
         x = self.pts_backbone(x)
         if self.with_pts_neck:
             x = self.pts_neck(x)
-        return x
+        return x, ef
 
     def forward_pts_train(self,
                           pts_feats,
@@ -110,9 +155,44 @@ class CenterPointSSL(MVXTwoStageDetector):
         Returns:
             dict: Losses of different branches.
         """
+        #ps.set_up_dir('z_up')
+        #ps.init()
+        #for i, pi in enumerate(points):
+        #    ps.register_point_cloud(f'pts-{i}',
+        #        pi[:, :3].detach().cpu(), radius=2e-4)
+        #import ipdb; ipdb.set_trace()
+        #size_x, size_y = self.pts_voxel_layer.voxel_size[:2]
+        #lx, ly, lz = self.pts_voxel_layer.point_cloud_range[:3]
+        #for task_id, heatmap in enumerate(heatmaps):
+        #    for scene_id, scene_heatmap in enumerate(heatmap):
+        #        # scalar, [1, 128, 128]
+        #        y, x = torch.where(scene_heatmap[0] > 0) # tuple
+        #        x = lx + x*8*size_x
+        #        y = ly + y*8*size_y
+        #        z = torch.ones_like(x)
+        #        coors = torch.stack([x,y,z], dim=-1)
+        #        ps.register_point_cloud(
+        #            f'heatmap-task{task_id}-scene{scene_id}',
+        #            coors.detach().cpu(), radius=1e-3, enabled=False)
+        #box_connection = [[0, 1], [0, 3], [0, 4], [1, 2], [1, 5], [2, 3],
+        #                  [2, 6], [3, 7], [4, 5], [4, 7], [5, 6], [6, 7]]
+        #box_connection = torch.as_tensor(box_connection, dtype=torch.long)
+        #box_connection = box_connection.view(-1, 2)
+        #for scene_id, (bboxes, labels) in enumerate(zip(gt_bboxes_3d, gt_labels_3d)):
+        #    corners = bboxes.corners
+        #    edges = [box_connection + 8*i for i in range(corners.shape[0])]
+        #    edges = torch.cat(edges, dim=0)
+        #    colors = torch.randn(3, 3)
+        #    edge_colors = colors[labels].repeat(12, 1, 1).transpose(0, 1).reshape(-1, 3)
+        #    box_net = ps.register_curve_network(f'boxes-scene{scene_id}',
+        #        corners.detach().cpu().view(-1, 3),
+        #        edges.detach().cpu().view(-1, 2), radius=4e-4)
+        #    box_net.add_color_quantity('edges', edge_colors, defined_on='edges', enabled=True)
+        #ps.show()
+            
         losses = dict()
         if (use_obj_labels is None):
-            img_feats, pts_feats = self.extract_feat(
+            img_feats, (pts_feats, middle_feats) = self.extract_feat(
                 points, img=img, img_metas=img_metas)
             if pts_feats:
                 losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
@@ -138,7 +218,7 @@ class CenterPointSSL(MVXTwoStageDetector):
                 img_metas = [im for im, u in zip(img_metas, use_obj_labels) if u]
             if gt_bboxes_ignore is not None:
                 gt_bboxes_ignore = [im for im, u in zip(gt_bboxes_ignore, use_obj_labels) if u]
-            img_feats, pts_feats = self.extract_feat(
+            img_feats, (pts_feats, middle_feats) = self.extract_feat(
                 points_s, img=img, img_metas=img_metas)
             if pts_feats:
                 losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
@@ -148,9 +228,51 @@ class CenterPointSSL(MVXTwoStageDetector):
         else:
             losses['loss_fake'] = torch.nn.Parameter(torch.zeros(1), requires_grad=True).to(points[0].device)
         if motion_mask_3d is not None:
-            points_m = [p for p, m in zip(points, motion_mask_3d) if m.float().sum()>0]
+            points_m = [p for p, m in zip(points, motion_mask_3d) if m.sum()>0]
+            masks_m = [m for m in motion_mask_3d if m.sum()>0]
             if len(points_m) > 0:
-                pass
+                img_feats, (pts_feats, middle_feats) = self.extract_feat(
+                    points_m, img=img, img_metas=img_metas)
+
+                out_factors = [1, 1, 2, 4, 8, 8]
+                voxel_size_x, voxel_size_y, voxel_size_z = self.pts_voxel_layer.voxel_size[:3]
+                min_x, min_y, min_z = self.pts_voxel_layer.point_cloud_range[:3]
+                moving_points = []
+                for i, (points, mask) in enumerate(zip(points_m, masks_m)):
+                    mp = points[torch.where(mask > 0.5)[0]][:, :3]
+                    #x = ( x - min_x ) / out_factors[i] / voxel_size_x
+                    #y = ( y - min_y ) / out_factors[i] / voxel_size_y
+                    #z = ( z - min_z ) / out_factors[i] / voxel_size_z
+                    b = torch.zeros_like(mp[:, 0]) + i*10
+                    mp = torch.cat([b.unsqueeze(-1), mp], dim=-1)
+                    moving_points.append(mp)
+                moving_points = torch.cat(moving_points, dim=0)
+                    
+                #ps.init()
+                #ps.set_up_dir('z_up')
+                #for i, pi in enumerate(points_m):
+                #    ps.register_point_cloud(f'p-{i}', pi.detach().cpu()[:, :3], radius=2e-4)
+                for i, (middle_feat, out_f) in enumerate(zip(middle_feats, out_factors)):
+                    if self.ssl_weights[i] == 0:
+                        continue
+                    indices = middle_feat.indices
+                    b, z, x, y = indices.T
+                    x = x * voxel_size_x * out_f + min_x
+                    y = y * voxel_size_y * out_f + min_y
+                    z = z * voxel_size_z * out_f + min_z
+                    vox_pos = torch.stack([b*10, y, x, z], dim=-1)
+                    e0, e1 = radius(moving_points, vox_pos, (0.15**2+0.2**2+0.15**2)**0.5/2.0)
+                    degree = scatter(torch.ones_like(e0), index=e0, dim=0, dim_size=vox_pos.shape[0])
+                    moving_index = torch.where(degree >= 3)[0]
+                    out = self.ssl_mlps[i](middle_feat.features.unsqueeze(-1).unsqueeze(-1))[:, :, 0, 0]
+                    gt_labels = torch.zeros(out.shape[0], dtype=torch.long).to(out.device)
+                    gt_labels[moving_index] = 1
+                    losses[f'loss_ssl{i}'] = self.ce_loss(out, gt_labels) * self.ssl_weights[i]
+                    #vox_pos = vox_pos[moving_index]
+                    #for j in range(len(points_m)):
+                    #    vox_pos_j = vox_pos[(vox_pos[:, 0] == j)][:, 1:]
+                    #    ps.register_point_cloud(f'moving voxels-{j}', vox_pos_j.detach().cpu(), radius=5e-4)
+                    #ps.show()
 
         return losses
 

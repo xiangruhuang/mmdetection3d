@@ -93,7 +93,8 @@ class SparseEncoder(nn.Module):
             conv_type='SparseConv3d')
 
     @auto_fp16(apply_to=('voxel_features', ))
-    def forward(self, voxel_features, coors, batch_size):
+    def forward(self, voxel_features, coors, batch_size,
+            return_encode_features=False):
         """Forward of SparseEncoder.
 
         Args:
@@ -111,7 +112,7 @@ class SparseEncoder(nn.Module):
                                                   batch_size)
         x = self.conv_input(input_sp_tensor)
 
-        encode_features = []
+        encode_features = [input_sp_tensor, x]
         for encoder_layer in self.encoder_layers:
             x = encoder_layer(x)
             encode_features.append(x)
@@ -124,7 +125,10 @@ class SparseEncoder(nn.Module):
         N, C, D, H, W = spatial_features.shape
         spatial_features = spatial_features.view(N, C * D, H, W)
 
-        return spatial_features
+        if return_encode_features:
+            return spatial_features, encode_features
+        else:
+            return spatial_features
 
     def make_encoder_layers(self,
                             make_block,
