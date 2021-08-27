@@ -26,5 +26,6 @@ model = dict(
 workflow = [('train', 1)]
 runner = dict(type='EpochBasedRunner', max_epochs=40)
 resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/latest.pth'
-eval_options=dict(prklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
+eval_options=dict(
+    pklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
 
