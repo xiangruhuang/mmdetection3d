@@ -201,6 +201,7 @@ class KITTI2Waymo(object):
                 print(filename, 'not found.')
                 objects = metrics_pb2.Objects()
 
+            print(f'saving to {self.waymo_results_save_dir}/{filename}.bin')
             with open(
                     join(self.waymo_results_save_dir, f'{filename}.bin'),
                     'wb') as f:

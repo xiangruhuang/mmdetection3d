@@ -11,7 +11,7 @@ file_client_args = dict(backend='disk')
 #     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
 class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, 0.3, 74.88, 74.88, 4]
+point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
 input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
@@ -75,6 +75,7 @@ test_pipeline = [
         load_dim=6,
         use_dim=5,
         file_client_args=file_client_args),
+    dict(type='PointsRangeFilter', point_cloud_range=point_cloud_range),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -105,6 +106,7 @@ eval_pipeline = [
         load_dim=6,
         use_dim=5,
         file_client_args=file_client_args),
+    dict(type='PointsRangeFilter', point_cloud_range=point_cloud_range),
     dict(
         type='DefaultFormatBundle3D',
         class_names=class_names,
@@ -138,7 +140,8 @@ data = dict(
         modality=input_modality,
         classes=class_names,
         test_mode=True,
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR',
+        load_interval=100),
     test=dict(
         type=dataset_type,
         data_root=data_root,
@@ -148,6 +151,7 @@ data = dict(
         modality=input_modality,
         classes=class_names,
         test_mode=True,
-        box_type_3d='LiDAR'))
+        box_type_3d='LiDAR',
+        load_interval=100))
 
 evaluation = dict(interval=40, pipeline=eval_pipeline)

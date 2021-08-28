@@ -103,7 +103,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-
+    print(args)
     assert args.out or args.eval or args.format_only or args.show \
         or args.show_dir, \
         ('Please specify at least one operation (save/eval/format/show the '
@@ -159,7 +159,6 @@ def main():
 
     # build the dataloader
     dataset = build_dataset(cfg.data.test)
-    print(f'Dataset: {dataset}')
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
