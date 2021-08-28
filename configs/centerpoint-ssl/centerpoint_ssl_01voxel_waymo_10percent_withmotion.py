@@ -24,16 +24,15 @@ model = dict(
     test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2], nms_type='circle')),
     ssl_mlps=dict(ssl_channels=[
         ([5, 128, 2], 0.0),
-        ([16, 128, 2], 0.5),
-        ([32, 128, 2], 0.5),
+        ([16, 128, 2], 0.1),
+        ([32, 128, 2], 0.1),
         ([64, 128, 2], 0.5),
         ([128, 128, 2], 0.5),
-        ([128, 128, 2], 0.5),
+        ([128, 128, 2], 1.0),
         ])
     )
 
 workflow = [('train', 1)]
 runner = dict(type='EpochBasedRunner', max_epochs=40)
-#resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/latest.pth'
-eval_options=dict(prklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
+eval_options=dict(pklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent_withmotion')
 

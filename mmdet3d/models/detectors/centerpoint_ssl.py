@@ -75,7 +75,7 @@ class CenterPointSSL(MVXTwoStageDetector):
             self.ce_loss = torch.nn.CrossEntropyLoss(
                 weight=torch.as_tensor([1e-2, 1.0]))
 
-    def extract_pts_feat(self, pts, img_feats, img_metas):
+    def extract_pts_feat(self, pts, img_feats, img_metas, return_middle=False):
         """Extract features of points."""
         if not self.with_pts_bbox:
             return None
@@ -83,14 +83,21 @@ class CenterPointSSL(MVXTwoStageDetector):
 
         voxel_features = self.pts_voxel_encoder(voxels, num_points, coors)
         batch_size = coors[-1, 0] + 1
-        x, ef = self.pts_middle_encoder(voxel_features, coors, batch_size,
-                    return_encode_features=True)
+        if return_middle:
+            x, ef = self.pts_middle_encoder(voxel_features, coors, batch_size,
+                        return_encode_features=return_middle)
+        else:
+            x = self.pts_middle_encoder(voxel_features, coors, batch_size,
+                    return_encode_features=return_middle)
         
         voxel_points = voxels.view(-1, voxels.shape[-1])
         x = self.pts_backbone(x)
         if self.with_pts_neck:
             x = self.pts_neck(x)
-        return x, ef
+        if return_middle:
+            return x, ef
+        else:
+            return x
 
     def forward_pts_train(self,
                           pts_feats,
