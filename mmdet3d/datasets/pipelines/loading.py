@@ -361,7 +361,6 @@ class LoadMotionMask3D(object):
             return results
         else:
             data = torch.load(motion_filename, map_location='cpu')
-            print(motion_filename)
             valid_idx = data['valid_idx']
             points = results['points']
             assert not valid_idx.is_cuda
