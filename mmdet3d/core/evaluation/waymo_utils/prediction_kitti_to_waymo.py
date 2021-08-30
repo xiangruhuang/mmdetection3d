@@ -201,7 +201,6 @@ class KITTI2Waymo(object):
                 print(filename, 'not found.')
                 objects = metrics_pb2.Objects()
 
-            print(f'saving to {self.waymo_results_save_dir}/{filename}.bin')
             with open(
                     join(self.waymo_results_save_dir, f'{filename}.bin'),
                     'wb') as f:
@@ -219,6 +218,7 @@ class KITTI2Waymo(object):
         combined = self.combine(pathnames)
 
         with open(self.waymo_results_final_path, 'wb') as f:
+            print(f'writing combined prediction results to {self.waymo_results_final_path}')
             f.write(combined.SerializeToString())
 
     def __len__(self):

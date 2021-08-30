@@ -11,7 +11,8 @@ file_client_args = dict(backend='disk')
 #     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
 class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, 0.3, 74.88, 74.88, 4]
+point_cloud_range = [-75.2, -75.2, -2, 75.2, 75.2, 4]
+#test_point_cloud_range = [-80, -80, -10.0, 80, 80, 10.0]
 input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
@@ -19,7 +20,7 @@ db_sampler = dict(
     rate=1.0,
     prepare=dict(
         filter_by_difficulty=[-1],
-        filter_by_min_points=dict(Car=5, Pedestrian=10, Cyclist=10)),
+        filter_by_min_points=dict(Car=5, Pedestrian=5, Cyclist=5)),
     classes=class_names,
     sample_groups=dict(Car=15, Pedestrian=10, Cyclist=10),
     points_loader=dict(

@@ -1,7 +1,10 @@
 import numba
 import numpy as np
 import warnings
-from numba.core.errors import NumbaPerformanceWarning
+if numba.__version__ < '0.50.1':
+    from numba.errors import NumbaPerformanceWarning
+else:
+    from numba.core.errors import NumbaPerformanceWarning
 
 from mmdet3d.core.bbox import box_np_ops
 

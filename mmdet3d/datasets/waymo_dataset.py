@@ -210,7 +210,7 @@ class WaymoDataset(KittiDataset):
             else:
                 raise ValueError('Not supported split value.')
             save_tmp_dir = tempfile.TemporaryDirectory()
-            waymo_results_save_dir = 'results/waymo_format/' #save_tmp_dir.name
+            waymo_results_save_dir = save_tmp_dir.name
             waymo_results_final_path = f'{pklfile_prefix}.bin'
             if 'pts_bbox' in result_files:
                 converter = KITTI2Waymo(result_files['pts_bbox'],
