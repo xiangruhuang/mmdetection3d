@@ -1,7 +1,9 @@
 _base_ = [
     '../_base_/datasets/waymoD5-3d-3class-ssl.py',
     '../_base_/models/centerpoint_ssl_01voxel_waymo.py',
-    '../_base_/schedules/cyclic_20e.py', '../_base_/default_runtime.py'
+    '../_base_/schedules/cyclic_20e.py',
+    #'../_base_/schedules/schedule_2x.py',
+    '../_base_/default_runtime.py',
 ]
 
 # If point cloud range is changed, the models should also change their point
@@ -14,7 +16,7 @@ class_names = [
     'Cyclist',
 ]
 
-point_cloud_range = [-74.88, -74.88, 0.3, 74.88, 74.88, 4]
+point_cloud_range = [-75.2, -75.2, -2, 75.2, 75.2, 4]
 
 model = dict(
     pts_voxel_layer=dict(point_cloud_range=point_cloud_range),
@@ -23,9 +25,9 @@ model = dict(
     train_cfg=dict(pts=dict(point_cloud_range=point_cloud_range)),
     test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2], nms_type='circle')))
 
-workflow = [('train', 1)]
-runner = dict(type='EpochBasedRunner', max_epochs=40)
-resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/latest.pth'
+workflow = [('train', 1), ('val', 1)]
+runner = dict(type='EpochBasedRunner', max_epochs=80)
+resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/epoch_40.pth'
 eval_options=dict(
     pklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
 

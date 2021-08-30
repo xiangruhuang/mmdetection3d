@@ -90,7 +90,7 @@ class CenterPointSSL(MVXTwoStageDetector):
             x = self.pts_middle_encoder(voxel_features, coors, batch_size,
                     return_encode_features=return_middle)
         
-        voxel_points = voxels.view(-1, voxels.shape[-1])
+        #voxel_points = voxels.view(-1, voxels.shape[-1])
         x = self.pts_backbone(x)
         if self.with_pts_neck:
             x = self.pts_neck(x)
@@ -199,7 +199,7 @@ class CenterPointSSL(MVXTwoStageDetector):
             
         losses = dict()
         if (use_obj_labels is None):
-            img_feats, (pts_feats, middle_feats) = self.extract_feat(
+            img_feats, pts_feats = self.extract_feat(
                 points, img=img, img_metas=img_metas)
             if pts_feats:
                 losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,
@@ -225,7 +225,7 @@ class CenterPointSSL(MVXTwoStageDetector):
                 img_metas = [im for im, u in zip(img_metas, use_obj_labels) if u]
             if gt_bboxes_ignore is not None:
                 gt_bboxes_ignore = [im for im, u in zip(gt_bboxes_ignore, use_obj_labels) if u]
-            img_feats, (pts_feats, middle_feats) = self.extract_feat(
+            img_feats, pts_feats = self.extract_feat(
                 points_s, img=img, img_metas=img_metas)
             if pts_feats:
                 losses_pts = self.forward_pts_train(pts_feats, gt_bboxes_3d,

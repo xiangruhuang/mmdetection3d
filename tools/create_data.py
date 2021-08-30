@@ -194,14 +194,23 @@ def waymo_data_prep(root_path,
     #    converter.convert()
     # Generate waymo infos
     out_dir = osp.join(out_dir, 'kitti_format')
-    kitti.create_waymo_info_file(out_dir, info_prefix, max_sweeps=max_sweeps)
+    #kitti.create_waymo_info_file(out_dir, info_prefix, max_sweeps=max_sweeps)
     create_groundtruth_database(
         'WaymoDataset',
         out_dir,
-        info_prefix,
-        f'{out_dir}/{info_prefix}_infos_train.pkl',
+        info_prefix+'_sub',
+        f'{out_dir}/{info_prefix}_infos_subtrain.pkl',
         relative_path=False,
-        with_mask=False)
+        with_mask=False,
+        db_info_save_path=
+            osp.join(out_dir, f'{info_prefix}_dbinfos_subtrain.pkl'))
+    #create_groundtruth_database(
+    #    'WaymoDataset',
+    #    out_dir,
+    #    info_prefix,
+    #    f'{out_dir}/{info_prefix}_infos_train.pkl',
+    #    relative_path=False,
+    #    with_mask=False)
 
 parser = argparse.ArgumentParser(description='Data converter arg parser')
 parser.add_argument('dataset', metavar='kitti', help='name of the dataset')
