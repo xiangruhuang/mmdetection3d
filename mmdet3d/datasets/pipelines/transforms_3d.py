@@ -364,6 +364,17 @@ class EstimateMotionMask(object):
         return results
 
 @PIPELINES.register_module()
+class RemoveBackgroundPoints(object):
+    def __init__(self, radius=2.0):
+        self.radius = radius
+
+    def __call__(self, results):
+        import ipdb; ipdb.set_trace()
+        print('hey')
+        pass
+
+
+@PIPELINES.register_module()
 class RemoveObjectLabels(object):
     def __init__(self, interval=10):
         self.interval = interval
