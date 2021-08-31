@@ -3,12 +3,24 @@ import numpy as np
 import torch
 import polyscope as ps
 
-try:
-    import open3d as o3d
-    from open3d import geometry
-except ImportError:
-    raise ImportError(
-        'Please run "pip install open3d" to install open3d first.')
+def visualize_points_and_boxes(points, gt_bboxes_3d, gt_names):
+    import polyscope as ps
+    ps.set_up_dir('z_up')
+    ps.init()
+    ps_points = ps.register_point_cloud(
+        'points', points.tensor[:, :3].cpu(), radius=2e-4)
+    points_xyz = points.tensor[:, :3]
+
+    mask = gt_bboxes_3d.points_in_boxes(points_xyz) # [B, N]
+    boxes = {'Car': [], 'Pedestrian': [], 'Cyclist': []}
+    for i, name in enumerate(gt_names):
+        points_i = points_xyz[mask[i, :] == 1]
+        boxes[name].append(points_i)
+    for key in boxes.keys():
+        if len(boxes[key]) > 0:
+            boxes[key] = torch.cat(boxes[key], dim=0)
+            ps.register_point_cloud(f'mask-{key}', boxes[key], radius=4e-4)
+    ps.show()
 
 class Visualizer(object):
     r"""Online visualizer implemented with PolyScope.

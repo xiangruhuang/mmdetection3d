@@ -12,18 +12,22 @@ class SNet(Base3DDetector):
                  backbone,
                  neck=None,
                  bbox_head=None,
+                 seg_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,):
         super(SNet, self).__init__()
         self.backbone = build_backbone(backbone)
+        if seg_head is not None:
+            self.seg_head = build_head(seg_head)
+        weight = torch.as_tensor([0.1, 1.0, 1.0, 4.0])
+        self.ce_loss = torch.nn.CrossEntropyLoss(weight)
         #bbox_head.update(train_cfg=train_cfg)
         #bbox_head.update(test_cfg=test_cfg)
         #self.bbox_head = build_head(bbox_head)
 
     def extract_feat(self, points, img_metas):
         """Extract features from points."""
-        import ipdb; ipdb.set_trace()
         
         feat_dicts = []
         for i in range(len(points)):
@@ -37,13 +41,14 @@ class SNet(Base3DDetector):
         #x = self.backbone(x)
         #if self.with_neck:
         #    x = self.neck(x)
-        return x
+        return feat_dicts
 
     def forward_train(self,
                       points,
                       img_metas,
                       gt_bboxes_3d,
                       gt_labels_3d,
+                      pts_segment_mask=None,
                       gt_bboxes_ignore=None):
         """Training forward function.
 
@@ -60,12 +65,25 @@ class SNet(Base3DDetector):
         Returns:
             dict: Losses of each branch.
         """
-        import ipdb; ipdb.set_trace()
         x = self.extract_feat(points, img_metas)
-        outs = self.bbox_head(x)
-        loss_inputs = outs + (gt_bboxes_3d, gt_labels_3d, img_metas)
-        losses = self.bbox_head.loss(
-            *loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+        outs = []
+        for xi in x:
+            outs.append(self.seg_head(xi))
+        outs = torch.cat(outs, dim=-1).squeeze(0).transpose(0, 1).softmax(-1)
+        pts_segment_mask = torch.cat(pts_segment_mask)
+        losses = dict()
+        losses['loss_seg'] = self.ce_loss(outs, pts_segment_mask.long())
+        pred = outs.argmax(-1)
+        names = ['BG', 'Car', 'Ped', 'Cyc']
+        for i, name in enumerate(names):
+            P = (pred == i)
+            T = (pts_segment_mask == i)
+            losses[f'{name}@P'] = P.float().sum()
+            losses[f'{name}@T'] = T.float().sum()
+            losses[f'{name}@TP'] = (T & P).float().sum()
+        #loss_inputs = outs + (gt_bboxes_3d, gt_labels_3d, img_metas)
+        #losses = self.bbox_head.loss(
+        #    *loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         return losses
 
     def simple_test(self, points, img_metas, imgs=None, rescale=False):

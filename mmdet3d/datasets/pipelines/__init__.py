@@ -12,7 +12,8 @@ from .transforms_3d import (BackgroundPointsFilter, GlobalAlignment,
                             ObjectSample, PointShuffle, PointsRangeFilter,
                             RandomFlip3D, VoxelBasedPointSampler, FPSPointSample,
                             EstimateMotionMask, ExtractMotionMask3D,
-                            RemoveBackgroundPoints)
+                            RemoveBackgroundPoints, ComputeSegmentMask,
+                            VoxelSample, RemoveLidarLines)
 __all__ = [
     'ObjectSample', 'RandomFlip3D', 'ObjectNoise', 'GlobalRotScaleTrans',
     'PointShuffle', 'ObjectRangeFilter', 'PointsRangeFilter', 'Collect3D',
@@ -23,5 +24,6 @@ __all__ = [
     'MultiScaleFlipAug3D', 'LoadPointsFromMultiSweeps',
     'BackgroundPointsFilter', 'VoxelBasedPointSampler', 'GlobalAlignment',
     'IndoorPatchPointSample', 'LoadImageFromFileMono3D', 'FPSPointSample',
-    'EstimateMotionMask', 'RemoveBackgroundPoints',
+    'EstimateMotionMask', 'RemoveBackgroundPoints', 'ComputeSegmentMask',
+    'VoxelSample', 'RemoveLidarLines',
 ]

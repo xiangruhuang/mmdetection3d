@@ -211,6 +211,9 @@ class DefaultFormatBundle3D(DefaultFormatBundle):
         
         if 'motion_mask_3d' in results:
             results['motion_mask_3d'] = DC(results['motion_mask_3d'])
+        
+        if 'pts_segment_mask' in results:
+            results['pts_segment_mask'] = DC(results['pts_segment_mask'])
 
         for key in ['voxels', 'coors', 'voxel_centers', 'num_points']:
             if key not in results:

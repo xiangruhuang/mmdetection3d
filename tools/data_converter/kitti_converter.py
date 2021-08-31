@@ -173,25 +173,25 @@ def create_waymo_info_file(data_path,
         save_path = Path(data_path)
     else:
         save_path = Path(save_path)
-    waymo_infos_subtrain = get_waymo_image_info(
-        data_path,
-        training=True,
-        velodyne=True,
-        calib=True,
-        pose=True,
-        image_ids=subtrain_img_ids,
-        relative_path=relative_path,
-        max_sweeps=max_sweeps,
-        with_imageshape=False)
-    _calculate_num_points_in_gt(
-        data_path,
-        waymo_infos_train,
-        relative_path,
-        num_features=6,
-        remove_outside=False)
-    filename = save_path / f'{pkl_prefix}_infos_subtrain.pkl'
-    print(f'Waymo info subtrain file is saved to {filename}')
-    mmcv.dump(waymo_infos_subtrain, filename)
+    #waymo_infos_subtrain = get_waymo_image_info(
+    #    data_path,
+    #    training=True,
+    #    velodyne=True,
+    #    calib=True,
+    #    pose=True,
+    #    image_ids=subtrain_img_ids,
+    #    relative_path=relative_path,
+    #    max_sweeps=max_sweeps,
+    #    with_imageshape=False)
+    #_calculate_num_points_in_gt(
+    #    data_path,
+    #    waymo_infos_train,
+    #    relative_path,
+    #    num_features=6,
+    #    remove_outside=False)
+    #filename = save_path / f'{pkl_prefix}_infos_subtrain.pkl'
+    #print(f'Waymo info subtrain file is saved to {filename}')
+    #mmcv.dump(waymo_infos_subtrain, filename)
 
     waymo_infos_train = get_waymo_image_info(
         data_path,
@@ -212,7 +212,8 @@ def create_waymo_info_file(data_path,
     filename = save_path / f'{pkl_prefix}_infos_train.pkl'
     print(f'Waymo info train file is saved to {filename}')
     mmcv.dump(waymo_infos_train, filename)
-    
+   
+    return
     waymo_infos_val = get_waymo_image_info(
         data_path,
         training=True,

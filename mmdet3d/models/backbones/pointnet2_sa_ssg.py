@@ -73,17 +73,17 @@ class PointNet2SASSG(BasePointNet):
             skip_channel_list.append(sa_out_channel)
             sa_in_channel = sa_out_channel
 
-        #self.FP_modules = nn.ModuleList()
+        self.FP_modules = nn.ModuleList()
 
-        #fp_source_channel = skip_channel_list.pop()
-        #fp_target_channel = skip_channel_list.pop()
-        #for fp_index in range(len(fp_channels)):
-        #    cur_fp_mlps = list(fp_channels[fp_index])
-        #    cur_fp_mlps = [fp_source_channel + fp_target_channel] + cur_fp_mlps
-        #    self.FP_modules.append(PointFPModule(mlp_channels=cur_fp_mlps))
-        #    if fp_index != len(fp_channels) - 1:
-        #        fp_source_channel = cur_fp_mlps[-1]
-        #        fp_target_channel = skip_channel_list.pop()
+        fp_source_channel = skip_channel_list.pop()
+        fp_target_channel = skip_channel_list.pop()
+        for fp_index in range(len(fp_channels)):
+            cur_fp_mlps = list(fp_channels[fp_index])
+            cur_fp_mlps = [fp_source_channel + fp_target_channel] + cur_fp_mlps
+            self.FP_modules.append(PointFPModule(mlp_channels=cur_fp_mlps))
+            if fp_index != len(fp_channels) - 1:
+                fp_source_channel = cur_fp_mlps[-1]
+                fp_target_channel = skip_channel_list.pop()
 
     @auto_fp16(apply_to=('points', ))
     def forward(self, points):
@@ -121,25 +121,25 @@ class PointNet2SASSG(BasePointNet):
             sa_indices.append(
                 torch.gather(sa_indices[-1], 1, cur_indices.long()))
 
-        #fp_xyz = [sa_xyz[-1]]
-        #fp_features = [sa_features[-1]]
-        #fp_indices = [sa_indices[-1]]
-        #
-        #for i in range(self.num_fp):
-        #    print('({}, {}) + ({}, {})'.format(sa_xyz[self.num_sa - i - 1].shape, sa_features[self.num_sa - i - 1].shape,
-        #        sa_xyz[self.num_sa - i].shape, fp_features[-1].shape), end="")
-        #    fp_features.append(self.FP_modules[i](
-        #        sa_xyz[self.num_sa - i - 1], sa_xyz[self.num_sa - i],
-        #        sa_features[self.num_sa - i - 1], fp_features[-1]))
-        #    fp_xyz.append(sa_xyz[self.num_sa - i - 1])
-        #    print('--> ({}, {})'.format(fp_xyz[-1].shape, fp_features[-1].shape))
-        #    #print('fp_feat: {}, fp_xyz: {}'.format(fp_features[-1].shape, fp_xyz[-1].shape))
-        #    fp_indices.append(sa_indices[self.num_sa - i - 1])
+        fp_xyz = [sa_xyz[-1]]
+        fp_features = [sa_features[-1]]
+        fp_indices = [sa_indices[-1]]
+        
+        for i in range(self.num_fp):
+            #print('({}, {}) + ({}, {})'.format(sa_xyz[self.num_sa - i - 1].shape, sa_features[self.num_sa - i - 1].shape,
+            #    sa_xyz[self.num_sa - i].shape, fp_features[-1].shape), end="")
+            fp_features.append(self.FP_modules[i](
+                sa_xyz[self.num_sa - i - 1], sa_xyz[self.num_sa - i],
+                sa_features[self.num_sa - i - 1], fp_features[-1]))
+            fp_xyz.append(sa_xyz[self.num_sa - i - 1])
+            #print('--> ({}, {})'.format(fp_xyz[-1].shape, fp_features[-1].shape))
+            #print('fp_feat: {}, fp_xyz: {}'.format(fp_features[-1].shape, fp_xyz[-1].shape))
+            fp_indices.append(sa_indices[self.num_sa - i - 1])
 
         ret = dict(
-            #fp_xyz=fp_xyz,
-            #fp_features=fp_features,
-            #fp_indices=fp_indices,
+            fp_xyz=fp_xyz,
+            fp_features=fp_features,
+            fp_indices=fp_indices,
             sa_xyz=sa_xyz,
             sa_features=sa_features,
             sa_indices=sa_indices)
