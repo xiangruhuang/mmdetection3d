@@ -471,7 +471,12 @@ class LoadPointsFromFile(object):
                 - points (:obj:`BasePoints`): Point clouds data.
         """
         pts_filename = results['pts_filename']
-        points = self._load_points(pts_filename)
+        try:
+            points = self._load_points(pts_filename)
+        except Exception as e:
+            print('error in reading points')
+            print(pts_filename)
+            assert False
         points = points.reshape(-1, self.load_dim)
         points = points[:, self.use_dim]
         attribute_dims = None

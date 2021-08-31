@@ -364,15 +364,90 @@ class EstimateMotionMask(object):
         return results
 
 @PIPELINES.register_module()
+class VoxelSample(object):
+    def __init__(self, voxel_size):
+        self.sampler = GridSampling(voxel_size)
+
+    def __call__(self, results):
+        points = results['points']
+        points_xyz = points.tensor[:, :3]
+        if points.tensor.shape[1] > 3:
+            feats = points.tensor[:, 3:]
+        else:
+            feats = None
+        data=Data(pos=points_xyz, x=feats)
+        data=self.sampler(data)
+        points_xyz = data.pos
+        feats = data.x
+        if feats is not None:
+            points.tensor = torch.cat([points_xyz, feats], dim=-1)
+        else:
+            points.tensor = points_xyz
+        results['points'] = points
+        return results
+
+@PIPELINES.register_module()
+class ComputeSegmentMask(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, results):
+        points = results['points']
+        points_xyz = points.tensor[:, :3]
+        gt_bboxes_3d = results['gt_bboxes_3d']
+        gt_labels_3d = results['gt_labels_3d']
+        mask = gt_bboxes_3d.points_in_boxes(points_xyz) # [B, N]
+        seg_mask = torch.zeros(points_xyz.shape[0], dtype=torch.int32)
+        for i in range(mask.shape[0]):
+            seg_mask[mask[i, :] == 1] = gt_labels_3d[i]+1
+        results['pts_segment_mask'] = seg_mask
+        return results
+
+@PIPELINES.register_module()
+class RemoveLidarLines(object):
+    def __init__(self, eigval_threshold=0.03, radius=0.4):
+        self.threshold = eigval_threshold
+        self.r = radius
+
+    def __call__(self, results):
+        points = results['points']
+        points = points.tensor[:, :3]
+        e0, e1 = radius(points, points, r=self.r, max_num_neighbors=64)
+        diff = (points[e0] - points[e1])
+        ppT = (diff.unsqueeze(-1) * diff.unsqueeze(-2)).view(-1, 9)
+        ppT_per_point = scatter(
+            ppT, e0, dim=0,
+            dim_size=points.shape[0], reduce='sum').view(-1, 3, 3)
+        eigvals = np.linalg.eigvalsh(ppT_per_point.numpy())
+        valid_idx = np.where(eigvals[:, 1] > self.threshold)[0]
+        valid_idx = torch.as_tensor(valid_idx, dtype=torch.long)
+        results['points'].tensor = results['points'].tensor[valid_idx]
+        return results
+        
+
+@PIPELINES.register_module()
 class RemoveBackgroundPoints(object):
     def __init__(self, radius=2.0):
         self.radius = radius
 
     def __call__(self, results):
-        import ipdb; ipdb.set_trace()
-        print('hey')
-        pass
-
+        points_xyz = points.tensor[:, :3]
+        gt_bboxes_3d = results['gt_bboxes_3d']
+        gt_labels_3d = results['gt_labels_3d']
+        mask = gt_bboxes_3d.points_in_boxes(points_xyz) # [B, N]
+        seg_mask = torch.zeros(points_xyz.shape[0], dtype=torch.bool)
+        for i in range(mask.shape[0]):
+            seg_mask[mask[i, :] == 1] = gt_labels_3d[i]
+        results['pts_segment_mask'] = seg_mask
+        #from mmdet3d.core.visualizer import visualize_points_and_boxes
+        #visualize_points_and_boxes(
+        #    results['points'],
+        #    results['gt_bboxes_3d'],
+        #    results['gt_names']
+        #)
+        #print('hey')
+        #pass
+        return results
 
 @PIPELINES.register_module()
 class RemoveObjectLabels(object):
