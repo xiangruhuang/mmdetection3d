@@ -13,11 +13,7 @@ from .data_augment_utils import noise_per_object_v3_
 from mmdet3d.ops import Points_Sampler
 from torch_geometric.nn import knn, fps, radius, knn_interpolate
 from mmdet3d.ops import points_in_boxes_cpu
-import polyscope as ps 
 import os
-#from pytorch3d.transforms.rotation_conversions import \
-#    matrix_to_quaternion, quaternion_to_matrix, \
-#    quaternion_to_axis_angle, axis_angle_to_quaternion
 from geop import icp_reweighted, batched_icp
 from geop import matrix_to_axis_angle, axis_angle_to_matrix
 import geop.geometry.util as gutil
@@ -144,6 +140,7 @@ class EstimateMotionMask(object):
         valid_idx = torch.as_tensor(valid_idx, dtype=torch.long)
         ref_list, normals_list = [], []
         if self.visualize:
+            import polyscope as ps
             ps.set_up_dir('z_up')
             ps.init()
             ps.remove_all_structures()
