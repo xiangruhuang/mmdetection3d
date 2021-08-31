@@ -9,7 +9,7 @@ optimizer = dict(type='AdamW', lr=1e-4, weight_decay=0.01)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 lr_config = dict(
     policy='cyclic',
-    target_ratio=(10, 1e-1),
+    target_ratio=(3, 1e-1),
     cyclic_times=10,
     step_ratio_up=0.4,
 )
