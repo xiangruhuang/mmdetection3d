@@ -1,13 +1,13 @@
-voxel_size = [0.15625, 0.15625, 0.2]
+voxel_size = [0.1, 0.1, 0.2]
 model = dict(
-    type='CenterPointSSL',
+    type='CenterPoint',
     pts_voxel_layer=dict(
-        max_num_points=5, voxel_size=voxel_size, max_voxels=(150000, 150000)),
+        max_num_points=10, voxel_size=voxel_size, max_voxels=(90000, 120000)),
     pts_voxel_encoder=dict(type='HardSimpleVFE', num_features=5),
     pts_middle_encoder=dict(
         type='SparseEncoder',
         in_channels=5,
-        sparse_shape=[40, 1024, 1024],
+        sparse_shape=[41, 1024, 1024],
         output_channels=128,
         order=('conv', 'norm', 'act'),
         encoder_channels=((16, 16, 32), (32, 32, 64), (64, 64, 128), (128,
@@ -16,7 +16,7 @@ model = dict(
         block_type='basicblock'),
     pts_backbone=dict(
         type='SECOND',
-        in_channels=128,
+        in_channels=256,
         out_channels=[128, 256],
         layer_nums=[5, 5],
         layer_strides=[1, 2],
@@ -34,16 +34,17 @@ model = dict(
         type='CenterHead',
         in_channels=sum([256, 256]),
         tasks=[
-            dict(num_class=3, class_names=['Car', 'Pedestrian', 'Cyclist']),
+            dict(num_class=1, class_names=['Car']),
+            dict(num_class=2, class_names=['Pedestrian', 'Cyclist']),
         ],
         common_heads=dict(
             reg=(2, 2), height=(1, 2), dim=(3, 2), rot=(2, 2), vel=(2, 2)),
         share_conv_channel=64,
         bbox_coder=dict(
             type='CenterPointBBoxCoder',
-            post_center_range=[-80, -80, -10.0, 80, 80, 10.0],
+            post_center_range=[-80.0, -80.0, -10.0, 80.0, 80.0, 10.0],
             max_num=500,
-            score_threshold=0.2,
+            score_threshold=0.1,
             out_size_factor=8,
             voxel_size=voxel_size[:2],
             code_size=9),
@@ -65,7 +66,7 @@ model = dict(
             code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2])),
     test_cfg=dict(
         pts=dict(
-            post_center_limit_range=[-80, -80, -10.0, 80, 80, 10.0],
+            post_center_limit_range=[-80.0, -80.0, -10.0, 80.0, 80.0, 10.0],
             max_per_img=500,
             max_pool_nms=False,
             min_radius=[4, 12, 10, 1, 0.85, 0.175],
@@ -73,6 +74,6 @@ model = dict(
             out_size_factor=8,
             voxel_size=voxel_size[:2],
             nms_type='rotate',
-            pre_max_size=4096,
-            post_max_size=500,
-            nms_thr=0.7)))
+            pre_max_size=1000,
+            post_max_size=83,
+            nms_thr=0.2)))

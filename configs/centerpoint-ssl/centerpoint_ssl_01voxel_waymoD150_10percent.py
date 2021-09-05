@@ -24,6 +24,17 @@ model = dict(
 workflow = [('train', 1), ('val', 1)]
 runner = dict(type='EpochBasedRunner', max_epochs=24)
 #resume_from = './work_dirs/centerpoint_ssl_01voxel_waymo_10percent/epoch_45.pth'
-#eval_options=dict(
-#    pklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
+eval_options=dict(
+    pklfile_prefix='./work_dirs/centerpoint_ssl_01voxel_waymo_10percent')
 
+data_root = 'data/waymo/kitti_format/'
+data=dict(
+    train=dict(dataset=dict(
+        load_interval=150,
+        ann_file=data_root + 'waymo_infos_subtrain.pkl')),
+    val=dict(
+        load_interval=150,
+        ann_file=data_root + 'waymo_infos_subtrain.pkl'),
+    test=dict(
+        load_interval=150,
+        ann_file=data_root + 'waymo_infos_subtrain.pkl'))

@@ -2,7 +2,7 @@
 
 CONFIG=$1
 GPUS=$2
-PORT=${PORT:-29816}
+PORT=${PORT:-61816}
 
 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH OMP_NUM_THREADS=3 \
 python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \

@@ -11,7 +11,7 @@ file_client_args = dict(backend='disk')
 #     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
 class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
+point_cloud_range = [-75.2, -75.2, -2, 75.2, 75.2, 4]
 input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
@@ -66,7 +66,7 @@ test_pipeline = [
         file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug3D',
-        img_scale=(1333, 800),
+        img_scale=(1440, 1440),
         pts_scale_ratio=1,
         flip=False,
         transforms=[

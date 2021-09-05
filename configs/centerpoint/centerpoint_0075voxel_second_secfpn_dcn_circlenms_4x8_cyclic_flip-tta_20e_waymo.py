@@ -1,18 +1,15 @@
-# dataset settings
-# D5 in the config name means the whole dataset is divided into 5 folds
-# We only use one fold for efficient experiments
+_base_ = './centerpoint_0075voxel_second_secfpn_dcn_' \
+         'circlenms_4x8_cyclic_20e_waymo.py'
+
+point_cloud_range = [-75.2, -75.2, -2.0, 75.2, 75.2, 4.0]
+file_client_args = dict(backend='disk')
+class_names = [
+    'Car', 'Pedestrian', 'Cyclist'
+]
+
 dataset_type = 'WaymoDataset'
 data_root = 'data/waymo/kitti_format/'
 file_client_args = dict(backend='disk')
-# Uncomment the following if use ceph or other file clients.
-# See https://mmcv.readthedocs.io/en/latest/api.html#mmcv.fileio.FileClient
-# for more details.
-# file_client_args = dict(
-#     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
-
-class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
-input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
     info_path=data_root + 'waymo_dbinfos_subtrain.pkl',
@@ -65,18 +62,28 @@ test_pipeline = [
         load_dim=6,
         use_dim=5,
         file_client_args=file_client_args),
+    #dict(
+    #    type='LoadPointsFromMultiSweeps',
+    #    sweeps_num=9,
+    #    use_dim=[0, 1, 2, 3, 4],
+    #    file_client_args=file_client_args,
+    #    pad_empty_sweeps=True,
+    #    remove_close=True),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
         pts_scale_ratio=1,
-        flip=False,
+        # Add double-flip augmentation
+        flip=True,
+        pcd_horizontal_flip=True,
+        pcd_vertical_flip=True,
         transforms=[
             dict(
                 type='GlobalRotScaleTrans',
                 rot_range=[0, 0],
                 scale_ratio_range=[1., 1.],
                 translation_std=[0, 0, 0]),
-            dict(type='RandomFlip3D'),
+            dict(type='RandomFlip3D', sync_2d=False),
             dict(
                 type='PointsRangeFilter', point_cloud_range=point_cloud_range),
             dict(
@@ -86,61 +93,23 @@ test_pipeline = [
             dict(type='Collect3D', keys=['points'])
         ])
 ]
-# construct a pipeline for data and gt loading in show function
-# please keep its loading function consistent with test_pipeline (e.g. client)
-eval_pipeline = [
-    dict(
-        type='LoadPointsFromFile',
-        coord_type='LIDAR',
-        load_dim=6,
-        use_dim=5,
-        file_client_args=file_client_args),
-    dict(
-        type='DefaultFormatBundle3D',
-        class_names=class_names,
-        with_label=False),
-    dict(type='Collect3D', keys=['points'])
-]
 
 data = dict(
     samples_per_gpu=2,
     workers_per_gpu=2,
     train=dict(
-        type='CBGSDataset',
+        type='RepeatDataset',
+        times=2,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
             ann_file=data_root + 'waymo_infos_subtrain.pkl',
-            split='training',
             pipeline=train_pipeline,
-            modality=input_modality,
-            classes=class_names,
-            test_mode=False,
-            use_valid_flag=True,
-            # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
-            # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-            box_type_3d='LiDAR',
-            # load one frame every five frames
             load_interval=1)),
-    val=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'waymo_infos_val.pkl',
-        split='training',
-        pipeline=test_pipeline,
-        modality=input_modality,
-        classes=class_names,
-        test_mode=True,
-        box_type_3d='LiDAR'),
-    test=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'waymo_infos_val.pkl',
-        split='training',
-        pipeline=test_pipeline,
-        modality=input_modality,
-        classes=class_names,
-        test_mode=True,
-        box_type_3d='LiDAR'))
+    val=dict(pipeline=test_pipeline),
+    test=dict(pipeline=test_pipeline)
+)
 
-evaluation = dict(interval=25, pipeline=eval_pipeline)
+evaluation = dict(interval=25)
+
+workflow=[('train', 1)]
