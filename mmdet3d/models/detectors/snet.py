@@ -4,6 +4,7 @@ from torch.nn import functional as F
 
 from mmdet.models import DETECTORS, build_backbone, build_head, build_neck
 from .base import Base3DDetector
+from torch_cluster import radius
 
 @DETECTORS.register_module()
 class SNet(Base3DDetector):
@@ -26,12 +27,40 @@ class SNet(Base3DDetector):
         #bbox_head.update(test_cfg=test_cfg)
         #self.bbox_head = build_head(bbox_head)
 
-    def extract_feat(self, points, img_metas):
+    def extract_feat(self, points, img_metas, pts_segment_mask):
         """Extract features from points."""
         
+        import polyscope as ps; ps.set_up_dir('z_up'); ps.init()
         feat_dicts = []
         for i in range(len(points)):
+            import ipdb; ipdb.set_trace()
+            
             feat_dict = self.backbone(points[i].unsqueeze(0))
+            ps.remove_all_structures()
+            rads=[0.5, 1, 2, 4]
+            fp_xyz_rev = feat_dict['fp_xyz'][::-1]
+            ps_p = ps.register_point_cloud('points-all',
+                points[i].detach().cpu()[:, :3], radius=2e-4)
+            ps_p.add_scalar_quantity('seg-mask',
+                pts_segment_mask[i].detach().cpu(), enabled=True)
+            for j, pj in enumerate(fp_xyz_rev):
+                if j == 0:
+                    continue
+                prev = fp_xyz_rev[j-1][0]
+                pj = pj[0]
+                #ps.register_point_cloud('points', prev.detach().cpu(), radius=2e-4)
+                ps.register_point_cloud('clusters', pj.detach().cpu(), radius=4e-4)
+                e0, e1 = radius(prev, pj, rads[j-1])
+                points_all = torch.cat([prev, pj], dim=0)
+                e0 = e0 + prev.shape[0]
+                edges = torch.stack([e0, e1], dim=1)
+                ps.register_curve_network(
+                    'edges',
+                    points_all.detach().cpu(),
+                    edges.detach().cpu(),
+                    radius=3e-4, enabled=False)
+                ps.show()
+                break
             feat_dicts.append(feat_dict)
 
         #voxels, num_points, coors = self.voxelize(points)
@@ -65,7 +94,7 @@ class SNet(Base3DDetector):
         Returns:
             dict: Losses of each branch.
         """
-        x = self.extract_feat(points, img_metas)
+        x = self.extract_feat(points, img_metas, pts_segment_mask)
         outs = []
         for xi in x:
             outs.append(self.seg_head(xi))
