@@ -4,12 +4,12 @@ model = dict(
     backbone=dict(
         type='PointNet2SASSG',
         in_channels=5,
-        num_points=(2048, 1024, 512, 256),
-        radius=(0.2, 0.4, 0.8, 1.2),
-        num_samples=(64, 32, 16, 16),
+        num_points=(4096, 512, 512, 512),
+        radius=(0.5, 1.0, 2.0, 4.0),
+        num_samples=(128, 32, 16, 16),
         sa_channels=((64, 64, 128), (128, 128, 256), (128, 128, 256),
                      (128, 128, 256)),
-        fp_channels=((256, 256), (256, 256), (256, 256), (128, 128)),
+        fp_channels=((256, 256, 256), (256, 256, 256), (256, 256, 256), (128, 128, 128)),
         norm_cfg=dict(type='BN2d'),
         sa_cfg=dict(
             type='PointSAModule',
