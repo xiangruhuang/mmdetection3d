@@ -11,7 +11,7 @@ file_client_args = dict(backend='disk')
 #     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
 class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-74.88, -74.88, -2, 74.88, 74.88, 4]
+point_cloud_range = [-75.2, -75.2, -2, 75.2, 75.2, 4]
 input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
@@ -106,7 +106,8 @@ data = dict(
     samples_per_gpu=2,
     workers_per_gpu=2,
     train=dict(
-        type='CBGSDataset',
+        type='RepeatDataset',
+        times=2,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
@@ -116,7 +117,6 @@ data = dict(
             modality=input_modality,
             classes=class_names,
             test_mode=False,
-            use_valid_flag=True,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
             # and box_type_3d='Depth' in sunrgbd and scannet dataset.
             box_type_3d='LiDAR',

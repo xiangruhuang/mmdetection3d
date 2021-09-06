@@ -24,7 +24,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=1000,
     warmup_ratio=1.0 / 1000,
-    step=[20, 23])
+    step=[10, 15, 23])
 momentum_config = None
 
 # runtime settings

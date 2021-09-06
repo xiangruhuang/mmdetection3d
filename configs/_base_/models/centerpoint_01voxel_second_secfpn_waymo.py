@@ -1,4 +1,4 @@
-voxel_size = [0.1, 0.1, 0.2]
+voxel_size = [0.15, 0.15, 0.15]
 model = dict(
     type='CenterPoint',
     pts_voxel_layer=dict(
@@ -69,7 +69,7 @@ model = dict(
             post_center_limit_range=[-80.0, -80.0, -10.0, 80.0, 80.0, 10.0],
             max_per_img=500,
             max_pool_nms=False,
-            min_radius=[4, 12, 10, 1, 0.85, 0.175],
+            min_radius=[4, 0.5],
             score_threshold=0.1,
             out_size_factor=8,
             voxel_size=voxel_size[:2],
