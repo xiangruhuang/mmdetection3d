@@ -198,7 +198,7 @@ class KITTI2Waymo(object):
                 objects = self.parse_objects(kitti_result, T_k2w, context_name,
                                              frame_timestamp_micros)
             else:
-                print(filename, 'not found.')
+                #print(filename, 'not found.')
                 objects = metrics_pb2.Objects()
 
             with open(

@@ -12,7 +12,7 @@ data_root = 'data/waymo/kitti_format/'
 file_client_args = dict(backend='disk')
 db_sampler = dict(
     data_root=data_root,
-    info_path=data_root + 'waymo_dbinfos_subtrain.pkl',
+    info_path=data_root + 'waymo_dbinfos_train.pkl',
     rate=1.0,
     prepare=dict(
         filter_by_difficulty=[-1],
@@ -71,7 +71,7 @@ test_pipeline = [
     #    remove_close=True),
     dict(
         type='MultiScaleFlipAug3D',
-        img_scale=(1333, 800),
+        img_scale=(2048, 2048),
         pts_scale_ratio=1,
         # Add double-flip augmentation
         flip=True,
@@ -103,7 +103,7 @@ data = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file=data_root + 'waymo_infos_subtrain.pkl',
+            ann_file=data_root + 'waymo_infos_train.pkl',
             pipeline=train_pipeline,
             load_interval=1)),
     val=dict(pipeline=test_pipeline),
