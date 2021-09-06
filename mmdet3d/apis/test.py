@@ -28,7 +28,7 @@ def single_gpu_test(model,
     Returns:
         list[dict]: The prediction results.
     """
-    model.train()
+    model.train() # for batch norm
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
