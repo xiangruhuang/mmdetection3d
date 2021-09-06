@@ -486,7 +486,15 @@ class MVXTwoStageDetector(Base3DDetector):
             assert out_dir is not None, 'Expect out_dir, got none.'
             inds = result[batch_id]['pts_bbox']['scores_3d'] > 0.1
             pred_bboxes = result[batch_id]['pts_bbox']['boxes_3d'][inds]
-
+            labels = result[batch_id]['pts_bbox']['labels_3d'][inds]
+            if len(labels) > 0:
+                names = []
+                for n in self.pts_bbox_head.class_names:
+                    names += n
+                print(names, labels)
+                cls_names = [names[label] for label in labels]
+            else:
+                cls_names = None
             # for now we convert points and bbox into depth mode
             if (box_mode_3d == Box3DMode.CAM) or (box_mode_3d
                                                   == Box3DMode.LIDAR):
@@ -499,4 +507,5 @@ class MVXTwoStageDetector(Base3DDetector):
                     f'Unsupported box_mode_3d {box_mode_3d} for convertion!')
 
             pred_bboxes = pred_bboxes.tensor.cpu().numpy()
-            show_result(points, None, pred_bboxes, out_dir, file_name)
+            show_result(points, None, None, pred_bboxes, cls_names,
+                        out_dir, file_name)

@@ -72,18 +72,21 @@ def _write_oriented_bbox(scene_bbox, out_filename):
 
 def show_result(points,
                 gt_bboxes,
+                gt_names,
                 pred_bboxes,
+                cls_names,
                 out_dir,
                 filename,
                 show=True,
-                snapshot=False,
-                gt_names=None):
+                snapshot=False):
     """Convert results into format that is directly readable for meshlab.
 
     Args:
         points (np.ndarray): Points.
         gt_bboxes (np.ndarray): Ground truth boxes.
+        gt_names (list[string]): Class of predicted boxes.
         pred_bboxes (np.ndarray): Predicted boxes.
+        cls_names (list[string]): Class of predicted boxes.
         out_dir (str): Path of output directory
         filename (str): Filename of the current frame.
         show (bool): Visualize the results online. Defaults to False.
@@ -93,12 +96,12 @@ def show_result(points,
     mmcv.mkdir_or_exist(result_path)
 
     if show:
+        print('hey')
         from .polyscope_vis import Visualizer
-
         vis = Visualizer(points)
-        if pred_bboxes is not None:
-            vis.add_bboxes(bbox3d=pred_bboxes)
-        if gt_bboxes is not None:
+        if (pred_bboxes is not None) and (len(pred_bboxes) > 0):
+            vis.add_bboxes(bbox3d=pred_bboxes, cls_names=cls_names)
+        if (gt_bboxes is not None) and (len(gt_bboxes) > 0):
             vis.add_bboxes(bbox3d=gt_bboxes, bbox_color=(0, 0, 1), cls_names=gt_names)
         show_path = osp.join(result_path,
                              f'{filename}_online.png') if snapshot else None

@@ -4,6 +4,7 @@ from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
 from mmdet.models import DETECTORS
 from .mvx_two_stage import MVXTwoStageDetector
 
+from mmdet3d.core.visualizer.polyscope_vis import Visualizer
 
 @DETECTORS.register_module()
 class CenterPoint(MVXTwoStageDetector):
@@ -30,13 +31,16 @@ class CenterPoint(MVXTwoStageDetector):
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
+        self.vis = Visualizer()
 
     def extract_pts_feat(self, pts, img_feats, img_metas):
         """Extract features of points."""
         if not self.with_pts_bbox:
             return None
         voxels, num_points, coors = self.voxelize(pts)
-
+        #self.vis.clean()
+        #self.vis.add_points('p0', pts[0])
+        import ipdb; ipdb.set_trace()
         voxel_features = self.pts_voxel_encoder(voxels, num_points, coors)
         batch_size = coors[-1, 0] + 1
         x = self.pts_middle_encoder(voxel_features, coors, batch_size)
@@ -68,7 +72,8 @@ class CenterPoint(MVXTwoStageDetector):
         """
         outs = self.pts_bbox_head(pts_feats)
         loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
-        losses = self.pts_bbox_head.loss(*loss_inputs)
+        import ipdb; ipdb.set_trace()
+        losses = self.pts_bbox_head.loss(*loss_inputs, visualizer=self.vis)
         return losses
 
     def simple_test_pts(self, x, img_metas, rescale=False):
@@ -106,6 +111,7 @@ class CenterPoint(MVXTwoStageDetector):
         """
         # only support aug_test for one sample
         outs_list = []
+        import ipdb; ipdb.set_trace()
         for x, img_meta in zip(feats, img_metas):
             outs = self.pts_bbox_head(x)
             # merge augmented outputs before decoding bboxes
@@ -165,6 +171,7 @@ class CenterPoint(MVXTwoStageDetector):
                 for key in pred_dict[0].keys():
                     preds_dict[task_id][0][key] /= len(outs_list) / len(
                         preds_dicts.keys())
+            print('heatmap range', preds_dict[0][0]['heatmap'].min(), preds_dict[0][0]['heatmap'].max())
             bbox_list = self.pts_bbox_head.get_bboxes(
                 preds_dict, img_metas[0], rescale=rescale)
             bbox_list = [

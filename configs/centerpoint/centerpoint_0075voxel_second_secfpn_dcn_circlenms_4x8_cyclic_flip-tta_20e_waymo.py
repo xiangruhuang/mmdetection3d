@@ -71,7 +71,7 @@ test_pipeline = [
     #    remove_close=True),
     dict(
         type='MultiScaleFlipAug3D',
-        img_scale=(1333, 800),
+        img_scale=(1536, 1536),
         pts_scale_ratio=1,
         # Add double-flip augmentation
         flip=True,

@@ -2,6 +2,8 @@ import copy
 import numpy as np
 import torch
 import polyscope as ps
+import open3d as o3d
+from open3d import geometry
 
 def visualize_points_and_boxes(points, gt_bboxes_3d, gt_names):
     import polyscope as ps
@@ -50,10 +52,10 @@ class Visualizer(object):
     """
 
     def __init__(self,
-                 points,
+                 points=None,
                  bbox3d=None,
                  save_path=None,
-                 radius=0.0001,
+                 radius=2e-4,
                  point_color=(0.5, 0.5, 0.5),
                  bbox_color=(0, 1, 0),
                  points_in_box_color=(1, 0, 0),
@@ -65,21 +67,24 @@ class Visualizer(object):
 
         self.class2color = {
                 'pedestrian': (1,0,0),
+                'Pedestrian': (1,0,0),
                 'car': (0,0,1),
+                'Car': (0,0,1),
                 'truck': (0,0,1),
                 'bus': (0,0,1),
                 'trailer': (0.0,0,0),
                 'barrier': (0.0,0,0.0),
                 'motorcycle': (0, 1, 0),
                 'bicycle': (0,1,0),
+                'Cyclist': (0,1,0),
                 'traffic_cone': (0,0,0),
                 'construction_vehicle': (0,0,0),
                 'background': (0.5, 0.5, 0.5),
-                'Unknown': (0, 0, 0),
+                'Unknown': (0.3, 0.3, 0.3),
             }
         self.points_by_class = {c: None for c in self.class2color.keys()}
 
-        points = points[:, :3]
+        ps.set_up_dir('z_up')
         ps.init()
         ps.remove_all_structures()
         self.bbox_count = 0
@@ -93,12 +98,14 @@ class Visualizer(object):
         self.mode = mode
         self.seg_num = 0
 
-        if isinstance(points, torch.Tensor):
-            points = points.numpy()
-        # draw points
-        self.bg_points = points
-        self.draw_points(points, 'background',
-            point_color=self.point_color, radius=self.radius)
+        if points is not None:
+            points = points[:, :3]
+            if isinstance(points, torch.Tensor):
+                points = points.numpy()
+            # draw points
+            self.bg_points = points
+            self.draw_points(points, 'background',
+                point_color=self.point_color, radius=self.radius)
 
         # draw boxes
         if bbox3d is not None:
@@ -106,13 +113,45 @@ class Visualizer(object):
                 bbox_color, points_in_box_color, rot_axis,
                 center_mode, mode)
 
+    def clean(self):
+        ps.remove_all_structures()
+
     def draw_data(self, gt_names, gt_bboxes, pred_bboxes=None):
         self.add_bboxes(bbox3d=gt_bboxes,
             bbox_color=(0, 0, 1), cls_names=gt_names)
 
+    def add_points(self, name, points):
+        """
+            name (string): name of this point cloud.
+            points (torch.Tensor, shape=[N, C]): points
+        """
+        ps.register_point_cloud(name, points[:, :3].detach().cpu(),
+            radius=self.radius)
+
+    def add_2d_mask(self, name, mask,
+            voxel_size=[0.1, 0.1],
+            point_cloud_range=[-75.2, -75.2, -2, 75.2, 75.2, 4]):
+        """
+            mask (torch.Tensor, shape=[N, M]): 2D scalar mask.
+        """
+        n, m = mask.shape
+        x=torch.arange(n)
+        y=torch.arange(m)
+        vx, vy = voxel_size
+        lx, ly = point_cloud_range[:2]
+        x, y = torch.meshgrid([x, y])
+        x = x * vx * 8 + lx
+        y = y * vy * 8 + ly
+        coors = torch.stack([y, x, mask.detach().cpu()], dim=-1)
+        coors = coors.reshape(-1, 3)
+        mask_f = mask.view(-1)
+        coors = coors[mask_f > 0]
+        
+        ps.register_point_cloud(name, coors.detach().cpu(), radius=self.radius*4)
+
     def draw_points(self, points, cls_name,
                     point_color=(0.5, 0.5, 0.5),
-                    radius=0.0001):
+                    radius=2e-4):
         """Draw points on visualizer.
 
         Args:
@@ -143,7 +182,7 @@ class Visualizer(object):
                 else self.class2color['Unknown'])
 
         return ps_pcd
-    
+
     def draw_bboxes(self, bbox3d,
                     bbox_color=(0, 1, 0),
                     points_in_box_color=(1, 0, 0),
@@ -172,6 +211,7 @@ class Visualizer(object):
         for i in range(len(bbox3d)):
             if isinstance(points_in_box_color, list):
                 in_box_color = np.array(points_in_box_color[i])
+                bbox_color = np.array(points_in_box_color[i])
             else:
                 in_box_color = np.array(points_in_box_color)
             center = bbox3d[i, 0:3]
@@ -200,13 +240,13 @@ class Visualizer(object):
             self.bbox_count += 1
 
             # change the color of points which are in box
-            indices = box3d.get_point_indices_within_bounding_box(
-                o3d.utility.Vector3dVector(self.bg_points)
-            )
-            points_in_box = self.bg_points[indices]
-            self.draw_points(points_in_box, cls_name)
-            self.bg_points = np.delete(self.bg_points, indices, axis=0)
-            ps.register_point_cloud('background', self.bg_points)
+            #indices = box3d.get_point_indices_within_bounding_box(
+            #    o3d.utility.Vector3dVector(self.bg_points)
+            #)
+            #points_in_box = self.bg_points[indices]
+            #self.draw_points(points_in_box, cls_name)
+            #self.bg_points = np.delete(self.bg_points, indices, axis=0)
+            #ps.register_point_cloud('background', self.bg_points)
 
     def add_bboxes(self, bbox3d, cls_names, bbox_color=None, points_in_box_color=None):
         """Add bounding box to visualizer.
