@@ -186,7 +186,7 @@ class Visualizer(object):
 
         return ps_pcd
 
-    def draw_bboxes(self, bbox3d,
+    def draw_bboxes(self, name, bbox3d,
                     bbox_color=(0, 1, 0),
                     points_in_box_color=(1, 0, 0),
                     rot_axis=2,
@@ -210,7 +210,9 @@ class Visualizer(object):
         if isinstance(bbox3d, torch.Tensor):
             bbox3d = bbox3d.cpu().numpy()
         bbox3d = bbox3d.copy()
-
+        points = []
+        lines = []
+        colors = []
         for i in range(len(bbox3d)):
             if isinstance(points_in_box_color, list):
                 in_box_color = np.array(points_in_box_color[i])
@@ -233,13 +235,16 @@ class Visualizer(object):
 
             line_set = geometry.LineSet.create_from_oriented_bounding_box(box3d)
             cls_name = cls_names[i]
-            ps_line_set = ps.register_curve_network(
-                    f'box{self.bbox_count}-{cls_names[i]}',
-                    np.array(line_set.points),
-                    np.array(line_set.lines),
-                    radius=0.0003,
-                    color=np.array(bbox_color)
-                    )
+            points.append(np.array(line_set.points))
+            lines.append(np.array(line_set.lines))
+            colors.append(np.array(bbox_color))
+            #ps_line_set = ps.register_curve_network(
+            #        f'box{self.bbox_count}-{cls_names[i]}',
+            #        np.array(line_set.points),
+            #        np.array(line_set.lines),
+            #        radius=0.0003,
+            #        color=np.array(bbox_color)
+            #        )
             self.bbox_count += 1
 
             # change the color of points which are in box
@@ -250,11 +255,17 @@ class Visualizer(object):
             #self.draw_points(points_in_box, cls_name)
             #self.bg_points = np.delete(self.bg_points, indices, axis=0)
             #ps.register_point_cloud('background', self.bg_points)
+        points = np.concatenate(points, axis=0)
+        lines = np.concatenate([line+i*8 for i, line in enumerate(lines)], axis=0)
+        colors = np.stack(colors, axis=0).repeat(12, 0)
+        ps_box=ps.register_curve_network(f'{name}', points, lines, radius=3e-4)
+        ps_box.add_color_quantity('colors', colors, enabled=True, defined_on='edges')
 
-    def add_bboxes(self, bbox3d, cls_names, bbox_color=None, points_in_box_color=None):
+    def add_bboxes(self, name, bbox3d, cls_names, bbox_color=None, points_in_box_color=None):
         """Add bounding box to visualizer.
 
         Args:
+            name: name for all boxes
             bbox3d (numpy.array, shape=[M, 7]):
                 3D bbox (x, y, z, dx, dy, dz, yaw) to be visualized.
                 The 3d bbox is in mode of Box3DMode.DEPTH with
@@ -272,7 +283,7 @@ class Visualizer(object):
             points_in_box_color.append(self.class2color.get(cls_name, self.class2color['Unknown']))
 
         self.draw_bboxes(
-            bbox3d, bbox_color, points_in_box_color, self.rot_axis,
+            name, bbox3d, bbox_color, points_in_box_color, self.rot_axis,
             self.center_mode, cls_names
         )
 

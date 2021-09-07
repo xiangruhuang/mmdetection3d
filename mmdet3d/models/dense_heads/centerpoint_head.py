@@ -583,7 +583,7 @@ class CenterHead(nn.Module):
         for task_id, preds_dict in enumerate(preds_dicts):
             assert len(preds_dict) == 1
             # heatmap focal loss
-            print(f'heatmap range training, task {task_id}', preds_dict[0]['heatmap'].min(), preds_dict[0]['heatmap'].max())
+            #print(f'heatmap range training, task {task_id}', preds_dict[0]['heatmap'].min(), preds_dict[0]['heatmap'].max())
             preds_dict[0]['heatmap'] = clip_sigmoid(preds_dict[0]['heatmap'])
             num_pos = heatmaps[task_id].eq(1).float().sum().item()
             loss_heatmap = self.loss_cls(
