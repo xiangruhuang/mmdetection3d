@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/datasets/waymoD5-3d-3class-10percent.py',
+    '../_base_/datasets/waymoD5-3d-3class.py',
     '../_base_/models/centerpoint_01voxel_second_secfpn_waymo.py',
     '../_base_/schedules/cyclic_20e_waymo_centerpoint.py', '../_base_/default_runtime.py'
 ]
@@ -25,7 +25,7 @@ file_client_args = dict(backend='disk')
 
 db_sampler = dict(
     data_root=data_root,
-    info_path=data_root + 'waymo_dbinfos_subtrain.pkl',
+    info_path=data_root + 'waymo_dbinfos_train.pkl',
     rate=1.0,
     prepare=dict(
         filter_by_difficulty=[-1],
@@ -119,15 +119,15 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=3,
-    workers_per_gpu=3,
+    samples_per_gpu=5,
+    workers_per_gpu=5,
     train=dict(
         type='RepeatDataset',
         times=2,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file=data_root + 'waymo_infos_subtrain.pkl',
+            ann_file=data_root + 'waymo_infos_train.pkl',
             pipeline=train_pipeline,
             classes=class_names,
             split='training',

@@ -66,7 +66,7 @@ test_pipeline = [
         file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug3D',
-        img_scale=(1440, 1440),
+        img_scale=(1024, 1024),
         pts_scale_ratio=1,
         flip=False,
         transforms=[
@@ -142,4 +142,4 @@ data = dict(
         test_mode=True,
         box_type_3d='LiDAR'))
 
-evaluation = dict(interval=1, pipeline=eval_pipeline)
+evaluation = dict(interval=30, pipeline=eval_pipeline)
