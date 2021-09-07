@@ -22,7 +22,7 @@ optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=1000,
+    warmup_iters=10,
     warmup_ratio=1.0 / 1000,
     step=[8, 15, 23])
 momentum_config = None

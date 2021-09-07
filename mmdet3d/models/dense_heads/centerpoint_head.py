@@ -13,7 +13,6 @@ from mmdet3d.models.utils import clip_sigmoid
 from mmdet3d.ops.iou3d.iou3d_utils import nms_gpu
 from mmdet.core import build_bbox_coder, multi_apply
 
-
 @HEADS.register_module()
 class SeparateHead(nn.Module):
     """SeparateHead for CenterHead.
@@ -558,7 +557,7 @@ class CenterHead(nn.Module):
         return heatmaps, anno_boxes, inds, masks
 
     @force_fp32(apply_to=('preds_dicts'))
-    def loss(self, gt_bboxes_3d, gt_labels_3d, preds_dicts, **kwargs):
+    def loss(self, gt_bboxes_3d, gt_labels_3d, preds_dicts, visualizer=None, **kwargs):
         """Loss function for CenterHead.
 
         Args:
@@ -573,8 +572,18 @@ class CenterHead(nn.Module):
         heatmaps, anno_boxes, inds, masks = self.get_targets(
             gt_bboxes_3d, gt_labels_3d)
         loss_dict = dict()
+        if False:
+            names = ['Car', 'Pedestrian', 'Cyclist']
+            cls_names = [names[l] for l in gt_labels_3d[0]]
+            visualizer.add_bboxes(gt_bboxes_3d[0].tensor, cls_names=cls_names)
+            visualizer.add_2d_mask('Car-heatmap', heatmaps[0][0, 0])
+            visualizer.add_2d_mask('Pedestrian-heatmap', heatmaps[1][0, 0])
+            visualizer.add_2d_mask('Cyclist-heatmap', heatmaps[1][0, 1])
+            visualizer.show()
         for task_id, preds_dict in enumerate(preds_dicts):
+            assert len(preds_dict) == 1
             # heatmap focal loss
+            #print(f'heatmap range training, task {task_id}', preds_dict[0]['heatmap'].min(), preds_dict[0]['heatmap'].max())
             preds_dict[0]['heatmap'] = clip_sigmoid(preds_dict[0]['heatmap'])
             num_pos = heatmaps[task_id].eq(1).float().sum().item()
             loss_heatmap = self.loss_cls(
@@ -601,8 +610,11 @@ class CenterHead(nn.Module):
 
             code_weights = self.train_cfg.get('code_weights', None)
             bbox_weights = mask * mask.new_tensor(code_weights)
+            #visualizer.add_bboxes(pred[0][mask[0]][:, :7], )
+            #import ipdb; ipdb.set_trace()
             loss_bbox = self.loss_bbox(
                 pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
+
             loss_dict[f'task{task_id}.loss_heatmap'] = loss_heatmap
             loss_dict[f'task{task_id}.loss_bbox'] = loss_bbox
         return loss_dict

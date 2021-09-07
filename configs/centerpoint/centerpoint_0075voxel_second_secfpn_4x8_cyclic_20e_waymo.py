@@ -2,7 +2,7 @@ _base_ = ['./centerpoint_01voxel_second_secfpn_4x8_cyclic_20e_waymo.py']
 
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
-voxel_size = [0.075, 0.075, 0.2]
+voxel_size = [0.075, 0.075, 0.15]
 point_cloud_range = [-75.2, -75.2, -2.0, 75.2, 75.2, 4.0]
 # For nuScenes we usually do 10-class detection
 class_names = [

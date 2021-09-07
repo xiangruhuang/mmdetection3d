@@ -4,6 +4,7 @@ from mmdet3d.core import bbox3d2result, merge_aug_bboxes_3d
 from mmdet.models import DETECTORS
 from .mvx_two_stage import MVXTwoStageDetector
 
+from mmdet3d.core.visualizer.polyscope_vis import Visualizer
 
 @DETECTORS.register_module()
 class CenterPoint(MVXTwoStageDetector):
@@ -23,20 +24,28 @@ class CenterPoint(MVXTwoStageDetector):
                  img_rpn_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
+                 pretrained=None,
+                 visualize=False):
         super(CenterPoint,
               self).__init__(pts_voxel_layer, pts_voxel_encoder,
                              pts_middle_encoder, pts_fusion_layer,
                              img_backbone, pts_backbone, img_neck, pts_neck,
                              pts_bbox_head, img_roi_head, img_rpn_head,
                              train_cfg, test_cfg, pretrained)
+        self.visualize = visualize
+        if self.visualize:
+            self.vis = Visualizer()
+        else:
+            self.vis = None
 
     def extract_pts_feat(self, pts, img_feats, img_metas):
         """Extract features of points."""
         if not self.with_pts_bbox:
             return None
         voxels, num_points, coors = self.voxelize(pts)
-
+        if self.visualize:
+            self.vis.clean()
+            self.vis.add_points('p0', pts[0])
         voxel_features = self.pts_voxel_encoder(voxels, num_points, coors)
         batch_size = coors[-1, 0] + 1
         x = self.pts_middle_encoder(voxel_features, coors, batch_size)
@@ -68,7 +77,15 @@ class CenterPoint(MVXTwoStageDetector):
         """
         outs = self.pts_bbox_head(pts_feats)
         loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
-        losses = self.pts_bbox_head.loss(*loss_inputs)
+        if self.visualize:
+            bbox_list = self.pts_bbox_head.get_bboxes(outs, img_metas)
+            names = ['Car', 'Pedestrian', 'Cyclist']
+            cls_names = [names[l] for l in bbox_list[0][2]]
+            gt_cls_names = [names[l] for l in gt_labels_3d[0]]
+            self.vis.add_bboxes('gt boxes', gt_bboxes_3d[0].tensor.detach().cpu(), cls_names)
+            self.vis.add_bboxes('pred boxes', bbox_list[0][0].tensor.detach().cpu(), cls_names)
+            self.vis.show()
+        losses = self.pts_bbox_head.loss(*loss_inputs, visualizer=self.vis)
         return losses
 
     def simple_test_pts(self, x, img_metas, rescale=False):
@@ -76,6 +93,11 @@ class CenterPoint(MVXTwoStageDetector):
         outs = self.pts_bbox_head(x)
         bbox_list = self.pts_bbox_head.get_bboxes(
             outs, img_metas, rescale=rescale)
+        if self.visualize:
+            names = ['Car', 'Pedestrian', 'Cyclist']
+            cls_names = [names[l] for l in bbox_list[0][2]]
+            self.vis.add_bboxes('pred boxes', bbox_list[0][0].tensor.detach().cpu(), cls_names)
+            self.vis.show()
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list
@@ -165,6 +187,10 @@ class CenterPoint(MVXTwoStageDetector):
                 for key in pred_dict[0].keys():
                     preds_dict[task_id][0][key] /= len(outs_list) / len(
                         preds_dicts.keys())
+            #print('heatmap range ({}, {})'.format(
+            #    preds_dict[0][0]['heatmap'].min().item(),
+            #    preds_dict[0][0]['heatmap'].max().item()))
+            #import ipdb; ipdb.set_trace()
             bbox_list = self.pts_bbox_head.get_bboxes(
                 preds_dict, img_metas[0], rescale=rescale)
             bbox_list = [

@@ -1,27 +1,44 @@
-# dataset settings
-# D5 in the config name means the whole dataset is divided into 5 folds
-# We only use one fold for efficient experiments
+_base_ = [
+    '../_base_/datasets/waymoD5-3d-3class.py',
+    '../_base_/models/centerpoint_01voxel_second_secfpn_waymo.py',
+    '../_base_/schedules/cyclic_20e_waymo_centerpoint.py', '../_base_/default_runtime.py'
+]
+
+# If point cloud range is changed, the models should also change their point
+# cloud range accordingly
+point_cloud_range = [-75.2, -75.2, -2.0, 75.2, 75.2, 4.0]
+# For nuScenes we usually do 10-class detection
+class_names = [
+    'Car', 'Pedestrian', 'Cyclist'
+]
+
+model = dict(
+    pts_voxel_layer=dict(point_cloud_range=point_cloud_range),
+    pts_bbox_head=dict(bbox_coder=dict(pc_range=point_cloud_range[:2])),
+    # model training and testing settings
+    train_cfg=dict(pts=dict(point_cloud_range=point_cloud_range)),
+    test_cfg=dict(pts=dict(pc_range=point_cloud_range[:2])))
+
 dataset_type = 'WaymoDataset'
 data_root = 'data/waymo/kitti_format/'
 file_client_args = dict(backend='disk')
-# Uncomment the following if use ceph or other file clients.
-# See https://mmcv.readthedocs.io/en/latest/api.html#mmcv.fileio.FileClient
-# for more details.
-# file_client_args = dict(
-#     backend='petrel', path_mapping=dict(data='s3://waymo_data/'))
 
-class_names = ['Car', 'Pedestrian', 'Cyclist']
-point_cloud_range = [-75.2, -75.2, -2, 75.2, 75.2, 4]
-input_modality = dict(use_lidar=True, use_camera=False)
 db_sampler = dict(
     data_root=data_root,
-    info_path=data_root + 'waymo_dbinfos_subtrain.pkl',
+    info_path=data_root + 'waymo_dbinfos_train.pkl',
     rate=1.0,
     prepare=dict(
         filter_by_difficulty=[-1],
-        filter_by_min_points=dict(Car=5, Pedestrian=10, Cyclist=10)),
+        filter_by_min_points=dict(
+            Car=5,
+            Pedestrian=10,
+            Cyclist=10)),
     classes=class_names,
-    sample_groups=dict(Car=15, Pedestrian=10, Cyclist=10),
+    sample_groups=dict(
+        Car=15,
+        Pedestrian=10,
+        Cyclist=10,
+        ),
     points_loader=dict(
         type='LoadPointsFromFile',
         coord_type='LIDAR',
@@ -36,11 +53,7 @@ train_pipeline = [
         load_dim=6,
         use_dim=5,
         file_client_args=file_client_args),
-    dict(
-        type='LoadAnnotations3D',
-        with_bbox_3d=True,
-        with_label_3d=True,
-        file_client_args=file_client_args),
+    dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True),
     dict(type='ObjectSample', db_sampler=db_sampler),
     dict(
         type='GlobalRotScaleTrans',
@@ -54,6 +67,7 @@ train_pipeline = [
         flip_ratio_bev_vertical=0.5),
     dict(type='PointsRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+    dict(type='ObjectNameFilter', classes=class_names),
     dict(type='PointShuffle'),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
     dict(type='Collect3D', keys=['points', 'gt_bboxes_3d', 'gt_labels_3d'])
@@ -67,16 +81,18 @@ test_pipeline = [
         file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug3D',
-        img_scale=(1333, 800),
+        img_scale=(1024, 1024),
         pts_scale_ratio=1,
         flip=False,
+        #pcd_horizontal_flip=True,
+        #pcd_vertical_flip=True,
         transforms=[
             dict(
                 type='GlobalRotScaleTrans',
                 rot_range=[0, 0],
                 scale_ratio_range=[1., 1.],
                 translation_std=[0, 0, 0]),
-            dict(type='RandomFlip3D'),
+            dict(type='RandomFlip3D', sync_2d=False),
             dict(
                 type='PointsRangeFilter', point_cloud_range=point_cloud_range),
             dict(
@@ -103,44 +119,57 @@ eval_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
+    samples_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(
         type='RepeatDataset',
-        times=2,
+        times=20,
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file=data_root + 'waymo_infos_subtrain.pkl',
-            split='training',
+            ann_file=data_root + 'waymo_infos_val.pkl',
             pipeline=train_pipeline,
-            modality=input_modality,
             classes=class_names,
+            split='training',
+            load_interval=300,
             test_mode=False,
             # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
             # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-            box_type_3d='LiDAR',
-            # load one frame every five frames
-            load_interval=1)),
+            box_type_3d='LiDAR')),
     val=dict(
-        type=dataset_type,
+        pipeline=train_pipeline,
+        classes=class_names,
         data_root=data_root,
         ann_file=data_root + 'waymo_infos_val.pkl',
         split='training',
-        pipeline=test_pipeline,
-        modality=input_modality,
-        classes=class_names,
         test_mode=True,
-        box_type_3d='LiDAR'),
+        load_interval=300),
     test=dict(
-        type=dataset_type,
+        pipeline=test_pipeline,
+        classes=class_names,
         data_root=data_root,
         ann_file=data_root + 'waymo_infos_val.pkl',
-        split='training',
-        pipeline=test_pipeline,
-        modality=input_modality,
-        classes=class_names,
         test_mode=True,
-        box_type_3d='LiDAR'))
+        split='training',
+        load_interval=300))
 
-evaluation = dict(interval=25, pipeline=eval_pipeline)
+resume_from='work_dirs/centerpoint_01voxel_waymoV/epoch_11.pth'
+evaluation = dict(
+    interval=30, pipeline=eval_pipeline,
+    pklfile_prefix='work_dirs/centerpoint_01voxel_waymoV/result')
+
+runner = dict(type='EpochBasedRunner', max_epochs=48)
+
+lr_config = dict(
+    policy='step',
+    warmup='linear',
+    warmup_iters=10,
+    warmup_ratio=1.0 / 1000,
+    step=[10, 15, 23, 30, 37])
+
+log_config = dict(
+    interval=10,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        #dict(type='TensorboardLoggerHook')
+    ])
