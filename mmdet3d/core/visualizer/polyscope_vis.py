@@ -2,8 +2,11 @@ import copy
 import numpy as np
 import torch
 import polyscope as ps
-import open3d as o3d
-from open3d import geometry
+try:
+    import open3d as o3d
+    from open3d import geometry
+except Exception as e:
+    print('failed to load open3d')
 
 def visualize_points_and_boxes(points, gt_bboxes_3d, gt_names):
     import polyscope as ps
